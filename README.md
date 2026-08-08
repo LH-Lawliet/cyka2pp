@@ -32,14 +32,18 @@ Prefer downloading a **release binary** — do not compile on the analyzer host.
 
 1. Pick the artifact for your CPU:
    - `cyka2pp-linux-x86_64-v4` — best perf (needs AVX-512: Ice Lake / Zen 4+)
-   - `cyka2pp-linux-x86_64-v2` — safer default (SSE4.2 / most servers since ~2015)
-2. Check CPU: `grep -m1 flags /proc/cpuinfo` — if you see `avx512f`, use **v4**.
+   - `cyka2pp-linux-x86_64-v3` — AVX2 / BMI2 (Haswell / Zen 2+ — good default for most VMs)
+   - `cyka2pp-linux-x86_64-v2` — safest (SSE4.2 / most servers since ~2015)
+2. Check CPU:
+   - `grep -o 'avx512f' /proc/cpuinfo | head -1` → non-empty → **v4**
+   - else `grep -o 'avx2' /proc/cpuinfo | head -1` → non-empty → **v3**
+   - else → **v2**
 3. Install:
 
 ```bash
 # on the analyzer container/host
 VER=v0.1.0   # ← set to the GitHub release tag
-ARCH=v4      # or v2
+ARCH=v3      # v2 | v3 | v4
 ASSET=cyka2pp-linux-x86_64-${ARCH}
 
 curl -fsSL -o /usr/local/bin/cyka2pp \
@@ -68,8 +72,8 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-That triggers `.github/workflows/release.yml`, which builds **v2 + v4**, runs
-unit tests on v2, and attaches both binaries (+ `.sha256`) to the GitHub
+That triggers `.github/workflows/release.yml`, which builds **v2 + v3 + v4**, runs
+unit tests on v2, and attaches binaries (+ `.sha256`) to the GitHub
 Release for that tag.
 
 You can also run the **Release** workflow manually (Actions → Release → Run

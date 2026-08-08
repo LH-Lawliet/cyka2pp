@@ -18,6 +18,8 @@ jobs:
         include:
           - march: x86-64-v2
             artifact: cyka2pp-linux-x86_64-v2
+          - march: x86-64-v3
+            artifact: cyka2pp-linux-x86_64-v3
           - march: x86-64-v4
             artifact: cyka2pp-linux-x86_64-v4
     steps:
