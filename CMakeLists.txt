@@ -7,16 +7,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # --- Build knobs (CI / releases) ---
-# CYKA_MARCH: empty | x86-64-v2 | x86-64-v4
 set(CYKA_MARCH "" CACHE STRING "Optional -march= value (e.g. x86-64-v2, x86-64-v4)")
 option(CYKA_STATIC "Static-link libstdc++/libgcc and prefer static snappy" ON)
 option(CYKA_FETCH_DEPS "Fetch nlohmann_json + snappy via FetchContent" OFF)
-
-add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-if(CYKA_MARCH)
-  add_compile_options(-march=${CYKA_MARCH})
-  message(STATUS "CYKA_MARCH=${CYKA_MARCH}")
-endif()
 
 if(CYKA_STATIC)
   # Portable Linux binary: no libstdc++.so / libgcc_s.so dependency.
@@ -26,8 +19,8 @@ endif()
 
 include(FetchContent)
 
+# Fetch deps BEFORE adding our -Werror / -march so they don't inherit them.
 if(CYKA_FETCH_DEPS)
-  # snappy's CMakeLists still declares an old minimum; allow modern CMake.
   set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
   FetchContent_Declare(
@@ -52,7 +45,6 @@ if(CYKA_FETCH_DEPS)
   set(CYKA_SNAPPY_TARGET snappy)
 else()
   find_package(nlohmann_json 3.11 REQUIRED)
-  # Prefer static archive when CYKA_STATIC (libsnappy.a).
   if(CYKA_STATIC)
     find_library(SNAPPY_LIB NAMES libsnappy.a snappy REQUIRED)
   else()
@@ -158,6 +150,18 @@ target_compile_definitions(cyka2pp-tests PRIVATE
     CYKA_MAPS_DIR="${CMAKE_SOURCE_DIR}/../cs2-maps-tri"
 )
 add_test(NAME cyka2pp-tests COMMAND cyka2pp-tests)
+
+# Warnings / march only on our targets (not FetchContent deps).
+set(CYKA_WARNINGS -Wall -Wextra -Wpedantic -Werror)
+foreach(tgt cyka_core cyka2pp cyka2pp-tests)
+  target_compile_options(${tgt} PRIVATE ${CYKA_WARNINGS})
+  if(CYKA_MARCH)
+    target_compile_options(${tgt} PRIVATE -march=${CYKA_MARCH})
+  endif()
+endforeach()
+if(CYKA_MARCH)
+  message(STATUS "CYKA_MARCH=${CYKA_MARCH}")
+endif()
 
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 if(CLANG_TIDY_EXE)

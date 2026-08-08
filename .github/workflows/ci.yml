@@ -22,7 +22,7 @@ jobs:
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCYKA_FETCH_DEPS=ON \
             -DCYKA_STATIC=ON \
