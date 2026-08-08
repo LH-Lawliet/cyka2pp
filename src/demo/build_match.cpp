@@ -1,6 +1,7 @@
 #include "cyka/demo/build_match.hpp"
 
 #include "cyka/csdata/weapons.hpp"
+#include "cyka/demo/steam_id.hpp"
 
 #include <memory>
 #include <unordered_map>
@@ -57,16 +58,16 @@ Match build_match(RawMatch raw, std::string file_hash) {
     }
 
     for (const auto& rp : raw.players) {
-        if (rp.steam_id.empty() || rp.steam_id.starts_with("uid:")) {
+        if (!is_individual_steam64(rp.steam_id)) {
             continue;
         }
-        // Keep quit players if they played or had a side.
-        if (!player_active(raw, rp.steam_id) && rp.team_letter.empty()) {
+        // Drop spectators / entity ghosts with no combat contribution.
+        if (!player_active(raw, rp.steam_id)) {
             continue;
         }
         Player p;
         p.steam_id = rp.steam_id;
-        p.name = rp.name;
+        p.name = looks_like_player_name(rp.name) ? rp.name : rp.steam_id;
         p.user_id = rp.user_id;
         p.team = rp.team_letter.empty() ? "A" : rp.team_letter;
         p.mvp_count = rp.mvp_count;

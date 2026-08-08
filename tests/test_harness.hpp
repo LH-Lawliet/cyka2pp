@@ -28,3 +28,4 @@ void test_cli();
 void test_vision();
 void test_tags();
 void test_golden();
+void test_steam_id();

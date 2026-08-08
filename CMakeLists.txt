@@ -142,6 +142,7 @@ add_executable(cyka2pp-tests
     tests/test_vision.cpp
     tests/test_tags.cpp
     tests/test_golden.cpp
+    tests/test_steam_id.cpp
 )
 target_link_libraries(cyka2pp-tests PRIVATE cyka_core)
 target_compile_definitions(cyka2pp-tests PRIVATE
@@ -157,6 +158,12 @@ foreach(tgt cyka_core cyka2pp cyka2pp-tests)
   target_compile_options(${tgt} PRIVATE ${CYKA_WARNINGS})
   if(CYKA_MARCH)
     target_compile_options(${tgt} PRIVATE -march=${CYKA_MARCH})
+    # GCC -march=x86-64-v3/v4 enables AVX and miscompiles our Source 2 entity
+    # bit reader (ghost steam IDs, zero eye angles, junk names). Keep BMI2/etc
+    # from the march level but force scalar SSE codegen until that is fixed.
+    if(CYKA_MARCH MATCHES "^x86-64-v[34]")
+      target_compile_options(${tgt} PRIVATE -mno-avx)
+    endif()
   endif()
 endforeach()
 if(CYKA_MARCH)

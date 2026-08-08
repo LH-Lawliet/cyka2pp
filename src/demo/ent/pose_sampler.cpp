@@ -1,8 +1,6 @@
-// Pose/identity extraction. Property names and the cell+offset position maths
-// follow demoinfocs-golang (MIT): sendtables/sendtablescs2/entity.go Position()
-// and common/player.go. See NOTICE.
-
 #include "cyka/demo/ent/pose_sampler.hpp"
+
+#include "cyka/demo/steam_id.hpp"
 
 #include <string>
 
@@ -59,7 +57,7 @@ bool read_position(const Entity& pawn, double& x, double& y, double& z) {
 
 bool fill_pose(const EntityContext& ctx, const Entity& controller, PoseSample& s) {
     const auto* steam = controller.prop(kSteamId);
-    if (steam == nullptr || steam->as_u64() < 76'561'197'960'265'728ULL) {
+    if (steam == nullptr || !is_individual_steam64(steam->as_u64())) {
         return false;
     }
     const auto handle = controller.prop_u64(kPlayerPawn);
@@ -110,12 +108,13 @@ void PoseSampler::collect_players(const EntityContext& ctx, std::vector<PlayerId
             continue;
         }
         const auto* steam = e->prop(kSteamId);
-        if (steam == nullptr || steam->as_u64() < 76'561'197'960'265'728ULL) {
+        if (steam == nullptr || !is_individual_steam64(steam->as_u64())) {
             continue;
         }
         PlayerIdent id;
         id.steam_id = steam->as_u64();
-        if (const auto* n = e->prop(kPlayerName); n != nullptr && n->kind == ValKind::Str) {
+        if (const auto* n = e->prop(kPlayerName); n != nullptr && n->kind == ValKind::Str &&
+                                                  looks_like_player_name(n->s)) {
             id.name = n->s;
         }
         if (const auto* t = e->prop(kTeamNum); t != nullptr) {
@@ -123,6 +122,10 @@ void PoseSampler::collect_players(const EntityContext& ctx, std::vector<PlayerId
         }
         if (const auto* c = e->prop(kConnected); c != nullptr) {
             id.connected = c->as_u64() == 0; // PlayerConnectedState::Connected
+        }
+        // Spectators / disconnected controllers still appear in PacketEntities.
+        if (!id.connected || (id.team != 2 && id.team != 3)) {
+            continue;
         }
         out.push_back(std::move(id));
     }

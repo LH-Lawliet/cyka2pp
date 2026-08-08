@@ -21,11 +21,21 @@ public:
         if (n == 0) {
             return 0;
         }
+        // Callers only need ≤32 bits; clamp so shift math stays defined.
+        if (n > 32) {
+            n = 32;
+        }
         while (n > bit_count_) {
+            // bit_count_ is always < 8 on entry to a fresh fill cycle leftover,
+            // and < n+8 afterward — still keep the shift strictly < 64.
+            if (bit_count_ >= 56) {
+                fail_ = true;
+                return 0;
+            }
             bit_val_ |= static_cast<std::uint64_t>(next_byte()) << bit_count_;
             bit_count_ += 8;
         }
-        const std::uint64_t mask = n >= 64 ? ~0ULL : ((1ULL << n) - 1ULL);
+        const std::uint64_t mask = (1ULL << n) - 1ULL;
         const std::uint64_t x = bit_val_ & mask;
         bit_val_ >>= n;
         bit_count_ -= n;
@@ -76,15 +86,22 @@ public:
     }
 
     std::uint64_t read_var_u64() noexcept {
+        // Up to 10 bytes; only bit 63 remains on the final byte. Never shift a
+        // uint64 by >= 64 (UB that GCC AVX codegen was happy to exploit).
         std::uint64_t x = 0;
-        for (std::uint32_t s = 0; s < 70; s += 7) {
+        for (int i = 0; i < 10; ++i) {
             const std::uint64_t b = read_byte();
-            if (b < 0x80) {
-                return x | (b << s);
-            }
-            x |= (b & 0x7FU) << s;
             if (fail_) {
-                break;
+                return x;
+            }
+            if (i < 9) {
+                x |= (b & 0x7FU) << (7 * i);
+                if ((b & 0x80U) == 0) {
+                    return x;
+                }
+            } else {
+                x |= (b & 0x01U) << 63;
+                return x;
             }
         }
         return x;

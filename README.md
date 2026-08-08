@@ -76,6 +76,10 @@ That triggers `.github/workflows/release.yml`, which builds **v2 + v3 + v4**, ru
 unit tests on v2, and attaches binaries (+ `.sha256`) to the GitHub
 Release for that tag.
 
+> **Note:** v3/v4 builds use `-march=x86-64-v{3,4} -mno-avx`. Plain AVX codegen
+> currently miscompiles the entity bit reader (junk roster + zero spray angles).
+> BMI2 and other v3 features stay enabled.
+
 You can also run the **Release** workflow manually (Actions → Release → Run
 workflow) to build artifacts without tagging; tagged pushes create the Release.
 
