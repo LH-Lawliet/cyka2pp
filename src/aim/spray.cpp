@@ -88,18 +88,22 @@ void spray_enrich(Match& match, std::vector<ShotSample> shots) {
             if (ri < 0 || static_cast<std::size_t>(ri) >= pat.size) {
                 continue;
             }
-            const auto& ideal = pat.data[static_cast<std::size_t>(ri)];
+            const auto& pat_pt = pat.data[static_cast<std::size_t>(ri)];
+            // Ideal = negated pattern = mouse compensation that cancels recoil
+            // (same as demolens). Tables are pattern-space; consumers may ×2 for GOTV.
+            const double ix = -pat_pt.x;
+            const double iy = -pat_pt.y;
             const double dx = angle_delta(s.yaw, cur[0].yaw);
             const double dy = s.pitch - cur[0].pitch;
-            dev_sum += std::hypot(dx - ideal.x, dy - ideal.y);
+            dev_sum += std::hypot(dx - ix, dy - iy);
             ++n_dev;
             while (static_cast<int>(sp->bullets.size()) <= ri) {
                 sp->bullets.push_back(SprayBullet{static_cast<int>(sp->bullets.size())});
             }
             auto& b = sp->bullets[static_cast<std::size_t>(ri)];
             b.i = ri;
-            b.ideal_x = ideal.x;
-            b.ideal_y = ideal.y;
+            b.ideal_x = ix;
+            b.ideal_y = iy;
             b.actual_x = (b.actual_x * b.n + dx) / (b.n + 1);
             b.actual_y = (b.actual_y * b.n + dy) / (b.n + 1);
             ++b.n;

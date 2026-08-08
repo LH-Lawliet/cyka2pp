@@ -15,12 +15,13 @@ struct SprayWeapon {
     double accuracy_pct{0};   // json: accuracy_pct
 };
 
-/// One shot-index average vs ideal recoil (`bullets[]`).
+/// One shot-index average vs ideal mouse compensation (`bullets[]`).
+/// ideal_* = -pattern (pull that cancels recoil); actual_* = view delta from shot 0.
 struct SprayBullet {
     int i{0};               // json: i
-    double ideal_x{0};      // json: ideal_x
+    double ideal_x{0};      // json: ideal_x (pattern-space compensation)
     double ideal_y{0};      // json: ideal_y
-    double actual_x{0};     // json: actual_x
+    double actual_x{0};     // json: actual_x (GOTV view degrees)
     double actual_y{0};     // json: actual_y
     int n{0};               // json: n
 };
@@ -31,7 +32,7 @@ struct SprayPattern {
     bool scoped{false}; // json: scoped
     bool silencer_on{false}; // json: silencer_on
     int sprays{0};           // json: sprays
-    double avg_deviation{0}; // json: avg_deviation
+    double avg_deviation{0}; // json: avg_deviation (deg off ideal compensation)
     std::vector<SprayBullet> bullets; // json: bullets
 };
 
