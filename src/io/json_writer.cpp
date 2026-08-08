@@ -129,7 +129,10 @@ json match_to_json(const Match& m) {
 
 Result<void> write_json(const Match& match, std::ostream& out, bool minify) {
     const json j = detail::match_to_json(match);
-    out << (minify ? j.dump() : j.dump(2)) << '\n';
+    // Demo strings (player names, etc.) are sometimes not valid UTF-8; replace
+    // bad bytes instead of aborting the whole analyze.
+    constexpr auto err = json::error_handler_t::replace;
+    out << (minify ? j.dump(-1, ' ', false, err) : j.dump(2, ' ', false, err)) << '\n';
     if (!out) {
         return std::unexpected(Error::Io);
     }
