@@ -96,8 +96,9 @@ void build(Match& match, const std::vector<SteamId>& steam_filter, const aim::Sa
                 if (cur.empty() || k->tick - cur.back()->tick <= window) {
                     cur.push_back(k);
                 } else {
-                    chains.push_back(cur);
-                    cur = {k};
+                    chains.push_back(std::move(cur));
+                    cur.clear();
+                    cur.push_back(k);
                 }
             }
             if (!cur.empty()) {
