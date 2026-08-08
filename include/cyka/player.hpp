@@ -16,14 +16,18 @@ struct SprayWeapon {
 };
 
 /// One shot-index average vs ideal mouse compensation (`bullets[]`).
-/// ideal_* = -pattern (pull that cancels recoil); actual_* = view delta from shot 0.
+/// ideal_* = -pattern (pull that cancels recoil).
+/// actual_* = path rebuilt from mean per-shot mouse steps (avoids fake flicks
+/// when later indices have fewer sprays than earlier ones).
 struct SprayBullet {
     int i{0};               // json: i
     double ideal_x{0};      // json: ideal_x (pattern-space compensation)
     double ideal_y{0};      // json: ideal_y
-    double actual_x{0};     // json: actual_x (GOTV view degrees)
+    double actual_x{0};     // json: actual_x (integrated mean steps, GOTV deg)
     double actual_y{0};     // json: actual_y
-    int n{0};               // json: n
+    int n{0};               // json: n (sprays that contributed this index)
+    double step_x{0};       // mean Δaim into this shot (not serialized)
+    double step_y{0};
 };
 
 /// Recoil-pattern deviation for one weapon variant (`spray_patterns[]`).

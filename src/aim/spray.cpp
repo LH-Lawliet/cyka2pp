@@ -31,6 +31,18 @@ constexpr int kSprayGapTicks = 16;
     return *p.aim;
 }
 
+/// Rebuild display path from mean steps so unequal spray lengths don't teleport.
+void rebuild_path_from_steps(SprayPattern& sp) {
+    double ax = 0;
+    double ay = 0;
+    for (auto& b : sp.bullets) {
+        ax += b.step_x;
+        ay += b.step_y;
+        b.actual_x = ax;
+        b.actual_y = ay;
+    }
+}
+
 } // namespace
 
 void spray_enrich(Match& match, std::vector<ShotSample> shots) {
@@ -79,13 +91,19 @@ void spray_enrich(Match& match, std::vector<ShotSample> shots) {
         int hits = 0;
         double dev_sum = 0;
         int n_dev = 0;
+        double prev_dx = 0;
+        double prev_dy = 0;
         for (std::size_t i = 0; i < cur.size(); ++i) {
             const auto& s = cur[i];
             if (s.hit) {
                 ++hits;
             }
             int ri = s.recoil_idx >= 0 ? s.recoil_idx : static_cast<int>(i);
+            const double dx = angle_delta(s.yaw, cur[0].yaw);
+            const double dy = s.pitch - cur[0].pitch;
             if (ri < 0 || static_cast<std::size_t>(ri) >= pat.size) {
+                prev_dx = dx;
+                prev_dy = dy;
                 continue;
             }
             const auto& pat_pt = pat.data[static_cast<std::size_t>(ri)];
@@ -93,8 +111,6 @@ void spray_enrich(Match& match, std::vector<ShotSample> shots) {
             // (same as demolens). Tables are pattern-space; consumers may ×2 for GOTV.
             const double ix = -pat_pt.x;
             const double iy = -pat_pt.y;
-            const double dx = angle_delta(s.yaw, cur[0].yaw);
-            const double dy = s.pitch - cur[0].pitch;
             dev_sum += std::hypot(dx - ix, dy - iy);
             ++n_dev;
             while (static_cast<int>(sp->bullets.size()) <= ri) {
@@ -104,10 +120,16 @@ void spray_enrich(Match& match, std::vector<ShotSample> shots) {
             b.i = ri;
             b.ideal_x = ix;
             b.ideal_y = iy;
-            b.actual_x = (b.actual_x * b.n + dx) / (b.n + 1);
-            b.actual_y = (b.actual_y * b.n + dy) / (b.n + 1);
+            // Average the step into this shot, then rebuild the polyline.
+            const double sx = dx - prev_dx;
+            const double sy = dy - prev_dy;
+            b.step_x = (b.step_x * b.n + sx) / (b.n + 1);
+            b.step_y = (b.step_y * b.n + sy) / (b.n + 1);
             ++b.n;
+            prev_dx = dx;
+            prev_dy = dy;
         }
+        rebuild_path_from_steps(*sp);
         if (n_dev > 0) {
             const double avg = dev_sum / n_dev;
             sp->avg_deviation =
