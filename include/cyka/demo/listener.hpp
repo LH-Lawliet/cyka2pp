@@ -31,8 +31,9 @@ public:
     [[nodiscard]] std::string team_letter(int team) const {
         return team >= 2 && team <= 3 ? side_letter_[team] : std::string{};
     }
-    void observe_entity_player(const SteamId& steam, const std::string& name) {
+    void observe_entity_player(const SteamId& steam, const std::string& name, int team = 0) {
         ensure_player(steam, name, 0);
+        note_team(steam, team);
     }
     void add_pose(RawPose pose) { raw_.poses.push_back(std::move(pose)); }
 
@@ -54,6 +55,10 @@ private:
     [[nodiscard]] std::string name_for_userid(std::int32_t userid) const;
     void ensure_player(const SteamId& steam, const std::string& name, int userid);
     [[nodiscard]] RawPlayer* find_player(const SteamId& steam);
+    /// Pin steam → A|B from CS team 2/3 using the current side_letter_ map.
+    void note_team(const SteamId& steam, int team);
+    /// Fill gaps in team_of_ by 2-coloring the kill graph (forfeit / missing events).
+    void infer_teams_from_kills();
     void begin_round(Tick tick);
     void end_round(Tick tick, int winner_team, std::string reason);
     /// CS2 demos often omit round_end; infer winner from bombs / wipe.

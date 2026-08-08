@@ -1,8 +1,10 @@
 #include "cyka/demo/listener.hpp"
 
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace cyka::demo {
 namespace {
@@ -58,6 +60,67 @@ namespace {
 }
 
 } // namespace
+
+void CollectingListener::infer_teams_from_kills() {
+    std::unordered_map<SteamId, std::vector<SteamId>> enemies;
+    for (const auto& k : raw_.kills) {
+        if (k.attacker_steam.empty() || k.victim_steam.empty() ||
+            k.attacker_steam == k.victim_steam) {
+            continue;
+        }
+        enemies[k.attacker_steam].push_back(k.victim_steam);
+        enemies[k.victim_steam].push_back(k.attacker_steam);
+    }
+    if (enemies.empty()) {
+        return;
+    }
+
+    // 1 = A, 2 = B. Seed from already-pinned players.
+    std::unordered_map<SteamId, int> color;
+    for (const auto& [sid, letter] : team_of_) {
+        color[sid] = letter == "B" ? 2 : 1;
+    }
+
+    auto try_paint = [&](const SteamId& start, int start_color) {
+        if (color.contains(start) && color[start] != start_color) {
+            return;
+        }
+        std::queue<SteamId> q;
+        if (!color.contains(start)) {
+            color[start] = start_color;
+        }
+        q.push(start);
+        while (!q.empty()) {
+            const SteamId cur = q.front();
+            q.pop();
+            const int c = color[cur];
+            for (const auto& nb : enemies[cur]) {
+                auto it = color.find(nb);
+                if (it == color.end()) {
+                    color[nb] = 3 - c;
+                    q.push(nb);
+                    continue;
+                }
+                // Conflict (teamkill / bad edge): ignore, keep existing color.
+            }
+        }
+    };
+
+    for (const auto& [sid, c] : std::unordered_map<SteamId, int>(color)) {
+        try_paint(sid, c);
+    }
+    for (const auto& [sid, _] : enemies) {
+        if (!color.contains(sid)) {
+            try_paint(sid, 1);
+        }
+    }
+
+    for (const auto& [sid, c] : color) {
+        if (!team_of_.contains(sid)) {
+            team_of_[sid] = c == 2 ? "B" : "A";
+        }
+    }
+}
 
 void CollectingListener::begin_round(Tick tick) {
     if (have_pending_) {
@@ -142,6 +205,7 @@ void CollectingListener::finish() {
     if (have_pending_) {
         close_round_inferred(raw_.ticks);
     }
+    infer_teams_from_kills();
     for (auto& p : raw_.players) {
         if (auto it = team_of_.find(p.steam_id); it != team_of_.end()) {
             p.team_letter = it->second;

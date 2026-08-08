@@ -96,11 +96,9 @@ void CollectingListener::on_event(Tick tick, const GameEvent& ev) {
         }
         const SteamId sid = steam_for_userid(uid);
         ensure_player(sid, name_for_userid(uid), uid);
-        // Pin A/B on first live assignment only. Later player_team events (and
-        // our post-R12 side_letter_ swap) would otherwise flip identities.
-        if (!sid.empty() && match_started_ && !team_of_.contains(sid)) {
-            team_of_[sid] = side_letter_[team];
-        }
+        // Pin on first T/CT assignment (warmup or live). Do not wait for
+        // match_started — short/forfeit demos often never emit a later pin.
+        note_team(sid, team);
         return;
     }
     if (n == "player_death") {

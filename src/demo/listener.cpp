@@ -109,4 +109,13 @@ RawPlayer* CollectingListener::find_player(const SteamId& steam) {
     return nullptr;
 }
 
+void CollectingListener::note_team(const SteamId& steam, int team) {
+    if (steam.empty() || team < 2 || team > 3) {
+        return;
+    }
+    if (!team_of_.contains(steam)) {
+        team_of_[steam] = side_letter_[team];
+    }
+}
+
 } // namespace cyka::demo
