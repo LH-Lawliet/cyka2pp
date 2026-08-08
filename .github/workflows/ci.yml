@@ -15,14 +15,14 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build clang lld
+          # g++-14: full libstdc++ with std::expected (C++23/26)
+          sudo apt-get install -y cmake ninja-build g++-14
 
       - name: Configure (x86-64-v2, fetched deps, static libstdc++)
         run: |
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_CXX_COMPILER=g++-14 \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCYKA_FETCH_DEPS=ON \
             -DCYKA_STATIC=ON \
@@ -36,6 +36,6 @@ jobs:
 
       - name: Smoke CLI
         run: |
-          ./build/cyka2pp --help || ./build/cyka2pp -h
+          ./build/cyka2pp -h
           file ./build/cyka2pp
           ldd ./build/cyka2pp || true
