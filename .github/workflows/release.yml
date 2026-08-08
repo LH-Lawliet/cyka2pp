@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release as (e.g. v0.1.0). Leave empty to build artifacts only."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - march: x86-64-v2
+            artifact: cyka2pp-linux-x86_64-v2
+          - march: x86-64-v4
+            artifact: cyka2pp-linux-x86_64-v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang lld
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCYKA_FETCH_DEPS=ON \
+            -DCYKA_STATIC=ON \
+            -DCYKA_MARCH=${{ matrix.march }}
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Unit tests (v2 only — v4 may not run on this runner)
+        if: matrix.march == 'x86-64-v2'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          strip -s build/cyka2pp || true
+          mkdir -p dist
+          cp build/cyka2pp "dist/${{ matrix.artifact }}"
+          chmod +x "dist/${{ matrix.artifact }}"
+          (
+            cd dist
+            sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
+          )
+          file "dist/${{ matrix.artifact }}"
+          ldd "dist/${{ matrix.artifact }}" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/${{ matrix.artifact }}
+            dist/${{ matrix.artifact }}.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

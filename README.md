@@ -26,10 +26,60 @@ than maintaining a multi-repo Go/Python/TS stack.
 
 Mesh LOS uses DLT1 `.tri` maps + BVH raycasts (batched / multi-threaded).
 
-## Requirements
+## Install (production / container)
+
+Prefer downloading a **release binary** — do not compile on the analyzer host.
+
+1. Pick the artifact for your CPU:
+   - `cyka2pp-linux-x86_64-v4` — best perf (needs AVX-512: Ice Lake / Zen 4+)
+   - `cyka2pp-linux-x86_64-v2` — safer default (SSE4.2 / most servers since ~2015)
+2. Check CPU: `grep -m1 flags /proc/cpuinfo` — if you see `avx512f`, use **v4**.
+3. Install:
+
+```bash
+# on the analyzer container/host
+VER=v0.1.0   # ← set to the GitHub release tag
+ARCH=v4      # or v2
+ASSET=cyka2pp-linux-x86_64-${ARCH}
+
+curl -fsSL -o /usr/local/bin/cyka2pp \
+  "https://github.com/LH-Lawliet/cyka2pp/releases/download/${VER}/${ASSET}"
+chmod +x /usr/local/bin/cyka2pp
+cyka2pp -h
+```
+
+Binaries are built with **static libstdc++ / libgcc** and a **static snappy**;
+they still need a normal glibc (Ubuntu/Debian). No `apt install snappy` required.
+
+Analyzer env:
+
+```bash
+export CYKA2PP_BIN=/usr/local/bin/cyka2pp   # optional if on PATH
+export CYKA2PP_MAPS_DIR=/path/to/maps       # .tri meshes
+```
+
+## Cutting a release (GitHub)
+
+CI runs on every PR (`ci.yml`). Publishing binaries:
+
+```bash
+# from a clean main with the version you want
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That triggers `.github/workflows/release.yml`, which builds **v2 + v4**, runs
+unit tests on v2, and attaches both binaries (+ `.sha256`) to the GitHub
+Release for that tag.
+
+You can also run the **Release** workflow manually (Actions → Release → Run
+workflow) to build artifacts without tagging; tagged pushes create the Release.
+
+## Requirements (local build)
 
 ```bash
 sudo pacman -S cmake ninja nlohmann-json snappy clang
+# or: cmake with -DCYKA_FETCH_DEPS=ON (fetches nlohmann_json + snappy)
 ```
 
 ## Build
@@ -39,6 +89,12 @@ cd ~/demo_go/cyka2pp
 cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
 cmake --build build
 ctest --test-dir build --output-on-failure
+
+# CI-style (fetched deps + static libstdc++ + march):
+cmake -G Ninja -B build-rel \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ \
+  -DCYKA_FETCH_DEPS=ON -DCYKA_STATIC=ON -DCYKA_MARCH=x86-64-v2
+cmake --build build-rel
 ```
 
 ## CLI

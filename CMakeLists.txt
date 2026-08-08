@@ -6,11 +6,62 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+# --- Build knobs (CI / releases) ---
+# CYKA_MARCH: empty | x86-64-v2 | x86-64-v4
+set(CYKA_MARCH "" CACHE STRING "Optional -march= value (e.g. x86-64-v2, x86-64-v4)")
+option(CYKA_STATIC "Static-link libstdc++/libgcc and prefer static snappy" ON)
+option(CYKA_FETCH_DEPS "Fetch nlohmann_json + snappy via FetchContent" OFF)
 
-find_package(nlohmann_json 3.11 REQUIRED)
+add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+if(CYKA_MARCH)
+  add_compile_options(-march=${CYKA_MARCH})
+  message(STATUS "CYKA_MARCH=${CYKA_MARCH}")
+endif()
+
+if(CYKA_STATIC)
+  # Portable Linux binary: no libstdc++.so / libgcc_s.so dependency.
+  # Still dynamically linked to glibc (fully -static + glibc is fragile).
+  add_link_options(-static-libgcc -static-libstdc++)
+endif()
+
+include(FetchContent)
+
+if(CYKA_FETCH_DEPS)
+  # snappy's CMakeLists still declares an old minimum; allow modern CMake.
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+  FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
+  )
+  set(JSON_BuildTests OFF CACHE INTERNAL "")
+  FetchContent_MakeAvailable(json)
+
+  set(SNAPPY_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(SNAPPY_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+  set(SNAPPY_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    snappy
+    GIT_REPOSITORY https://github.com/google/snappy.git
+    GIT_TAG 1.2.2
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(snappy)
+  set(CYKA_SNAPPY_TARGET snappy)
+else()
+  find_package(nlohmann_json 3.11 REQUIRED)
+  # Prefer static archive when CYKA_STATIC (libsnappy.a).
+  if(CYKA_STATIC)
+    find_library(SNAPPY_LIB NAMES libsnappy.a snappy REQUIRED)
+  else()
+    find_library(SNAPPY_LIB snappy REQUIRED)
+  endif()
+  set(CYKA_SNAPPY_TARGET ${SNAPPY_LIB})
+endif()
+
 find_package(Threads REQUIRED)
-find_library(SNAPPY_LIB snappy REQUIRED)
 
 set(CYKA_LIB_SOURCES
     src/cli.cpp
@@ -85,7 +136,7 @@ target_include_directories(cyka_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(cyka_core PUBLIC
     nlohmann_json::nlohmann_json
     Threads::Threads
-    ${SNAPPY_LIB}
+    ${CYKA_SNAPPY_TARGET}
 )
 
 add_executable(cyka2pp src/main.cpp)
