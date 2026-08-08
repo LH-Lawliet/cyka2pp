@@ -1,0 +1,28 @@
+# Golden round winners from demolens (MIT) for regression checks.
+# Demo: 3835689269611987518.dem  map=de_nuke  final 11-13
+#
+# Columns: round, winner_team (A|B), winner_side (CT|T), reason
+1,A,CT,elimination
+2,A,CT,elimination
+3,B,T,elimination
+4,B,T,bomb_exploded
+5,A,CT,elimination
+6,A,CT,bomb_defused
+7,A,CT,bomb_defused
+8,A,CT,elimination
+9,A,CT,elimination
+10,A,CT,elimination
+11,A,CT,elimination
+12,B,T,elimination
+13,B,CT,bomb_defused
+14,B,CT,elimination
+15,B,CT,elimination
+16,B,CT,elimination
+17,B,CT,elimination
+18,A,T,elimination
+19,B,CT,elimination
+20,B,CT,elimination
+21,B,CT,elimination
+22,B,CT,bomb_defused
+23,A,T,elimination
+24,B,CT,elimination
