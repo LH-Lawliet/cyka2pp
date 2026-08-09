@@ -118,4 +118,15 @@ void CollectingListener::note_team(const SteamId& steam, int team) {
     }
 }
 
+void CollectingListener::note_mvp_count(const SteamId& steam, int mvp_count) {
+    if (steam.empty() || mvp_count < 0) {
+        return;
+    }
+    if (auto* p = find_player(steam)) {
+        if (mvp_count > p->mvp_count) {
+            p->mvp_count = mvp_count;
+        }
+    }
+}
+
 } // namespace cyka::demo

@@ -15,6 +15,8 @@ struct PlayerIdent {
     std::string name;
     int team{0}; // 2 = T, 3 = CT
     bool connected{false};
+    /// From CCSPlayerController::m_iMVPs (cumulative in the demo).
+    int mvp_count{0};
 };
 
 /// One alive-player snapshot at a sampled tick.

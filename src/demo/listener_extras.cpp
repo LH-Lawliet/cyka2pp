@@ -13,8 +13,15 @@ namespace {
 } // namespace
 
 void CollectingListener::on_round_mvp(const GameEvent& ev) {
-    const int uid = ev_int(ev, "userid").value_or(0);
+    // CS2: userid is the usual field; some builds also expose userid_pawn.
+    int uid = ev_int(ev, "userid").value_or(0);
+    if (uid == 0) {
+        uid = ev_int(ev, "userid_pawn").value_or(0);
+    }
     const SteamId sid = steam_for_userid(uid);
+    if (sid.empty()) {
+        return;
+    }
     ensure_player(sid, name_for_userid(uid), uid);
     if (auto* p = find_player(sid)) {
         ++p->mvp_count;

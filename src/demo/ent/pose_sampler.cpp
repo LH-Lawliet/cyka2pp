@@ -19,6 +19,7 @@ const std::string kPlayerName = "m_iszPlayerName";
 const std::string kTeamNum = "m_iTeamNum";
 const std::string kPlayerPawn = "m_hPlayerPawn";
 const std::string kConnected = "m_iConnected";
+const std::string kMvps = "m_iMVPs";
 
 const std::string kEyeAngles = "m_angEyeAngles";
 const std::string kHealth = "m_iHealth";
@@ -122,6 +123,9 @@ void PoseSampler::collect_players(const EntityContext& ctx, std::vector<PlayerId
         }
         if (const auto* c = e->prop(kConnected); c != nullptr) {
             id.connected = c->as_u64() == 0; // PlayerConnectedState::Connected
+        }
+        if (const auto* m = e->prop(kMvps); m != nullptr) {
+            id.mvp_count = static_cast<int>(m->as_i64());
         }
         // Spectators / disconnected controllers still appear in PacketEntities.
         if (!id.connected || (id.team != 2 && id.team != 3)) {
