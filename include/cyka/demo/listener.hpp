@@ -32,11 +32,15 @@ public:
         return team >= 2 && team <= 3 ? side_letter_[team] : std::string{};
     }
     void observe_entity_player(const SteamId& steam, const std::string& name, int team = 0,
-                               int mvp_count = -1) {
+                               int mvp_count = -1, int rank_type = -1, int ranking = -1,
+                               int competitive_wins = -1) {
         ensure_player(steam, name, 0);
         note_team(steam, team);
         if (mvp_count >= 0) {
             note_mvp_count(steam, mvp_count);
+        }
+        if (rank_type >= 0 || ranking >= 0 || competitive_wins >= 0) {
+            note_rank(steam, rank_type, ranking, competitive_wins);
         }
     }
     void add_pose(RawPose pose) { raw_.poses.push_back(std::move(pose)); }
@@ -63,6 +67,8 @@ private:
     void note_team(const SteamId& steam, int team);
     /// Keep the highest observed CCSPlayerController::m_iMVPs for this player.
     void note_mvp_count(const SteamId& steam, int mvp_count);
+    /// Keep the latest non-zero competitive rank fields for this player.
+    void note_rank(const SteamId& steam, int rank_type, int ranking, int competitive_wins);
     /// Fill gaps in team_of_ by 2-coloring the kill graph (forfeit / missing events).
     void infer_teams_from_kills();
     void begin_round(Tick tick);

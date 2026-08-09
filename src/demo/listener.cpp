@@ -129,4 +129,26 @@ void CollectingListener::note_mvp_count(const SteamId& steam, int mvp_count) {
     }
 }
 
+void CollectingListener::note_rank(const SteamId& steam, int rank_type, int ranking,
+                                   int competitive_wins) {
+    if (steam.empty()) {
+        return;
+    }
+    auto* p = find_player(steam);
+    if (p == nullptr) {
+        return;
+    }
+    // Prefer a known mode once seen; demos usually keep a constant RankType.
+    if (rank_type > 0) {
+        p->rank_type = rank_type;
+    }
+    // Ranking can start at 0 (unranked) then populate; keep the highest.
+    if (ranking > p->ranking) {
+        p->ranking = ranking;
+    }
+    if (competitive_wins > p->competitive_wins) {
+        p->competitive_wins = competitive_wins;
+    }
+}
+
 } // namespace cyka::demo

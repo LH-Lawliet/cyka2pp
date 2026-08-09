@@ -74,6 +74,9 @@ public:
     int headshot_count{0};    // json: headshotCount
     int headshot_percent{0};  // json: headshotPercent
     int mvp_count{0};         // json: mvpCount
+    int rank_type{0};         // json: rankType (7=Wingman, 11=Premier, 12=Comp)
+    int ranking{0};           // json: ranking (skill group or CS Rating)
+    int competitive_wins{0};  // json: competitiveWins
     double kast{0};           // json: kast
     double hltv_rating{0};    // json: hltvRating
     double hltv_rating2{0};   // json: hltvRating2

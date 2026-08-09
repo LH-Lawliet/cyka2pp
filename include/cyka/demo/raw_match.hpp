@@ -43,6 +43,9 @@ struct RawPlayer {
     int user_id{0};
     bool is_bot{false};
     int mvp_count{0};
+    int rank_type{0};
+    int ranking{0};
+    int competitive_wins{0};
     int bomb_planted_count{0};
     int bomb_defused_count{0};
     int enemies_flashed{0};

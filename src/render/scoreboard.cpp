@@ -33,10 +33,10 @@ void write_team_table(std::ostream& out, const std::string& team_name,
                       const std::vector<const Player*>& players, const char* color) {
     out << color << kAnsiBold << "  " << team_name << kAnsiReset << '\n';
     out << kAnsiCyan << kAnsiBold << "  " << std::left << std::setw(16) << "Name" << std::right
-        << ' ' << std::setw(3) << "K" << ' ' << std::setw(3) << "A" << ' ' << std::setw(3) << "D"
-        << ' ' << std::setw(6) << "ADR" << ' ' << std::setw(6) << "TTD" << ' ' << std::setw(5)
-        << "HS%" << ' ' << std::setw(5) << "Rtg" << kAnsiReset << '\n';
-    out << kAnsiMuted << "  " << std::string(56, '-') << kAnsiReset << '\n';
+        << ' ' << std::setw(6) << "Rank" << ' ' << std::setw(3) << "K" << ' ' << std::setw(3) << "A"
+        << ' ' << std::setw(3) << "D" << ' ' << std::setw(6) << "ADR" << ' ' << std::setw(6) << "TTD"
+        << ' ' << std::setw(5) << "HS%" << ' ' << std::setw(5) << "Rtg" << kAnsiReset << '\n';
+    out << kAnsiMuted << "  " << std::string(64, '-') << kAnsiReset << '\n';
 
     for (const Player* p : players) {
         std::string ttd = "—";
@@ -45,12 +45,29 @@ void write_team_table(std::ostream& out, const std::string& team_name,
             oss << std::fixed << std::setprecision(0) << *p->aim->time_to_damage_ms;
             ttd = oss.str();
         }
+        std::string rank = "—";
+        if (p->rank_type == 11) {
+            // Premier CS Rating
+            if (p->ranking > 0) {
+                rank = std::to_string(p->ranking);
+            }
+        } else if (p->rank_type == 7 || p->rank_type == 12 || p->rank_type == 6) {
+            // Wingman / Competitive skill groups — show numeric group for CLI brevity
+            if (p->ranking > 0 && p->ranking <= 18) {
+                rank = std::to_string(p->ranking);
+            } else if (p->ranking == 0 && p->rank_type > 0) {
+                rank = "0";
+            }
+        } else if (p->ranking > 0) {
+            rank = std::to_string(p->ranking);
+        }
         double rtg = p->hltv_rating2 > 0 ? p->hltv_rating2 : p->hltv_rating;
         out << "  " << std::left << std::setw(16) << truncate(p->name, 16) << std::right << ' '
-            << std::setw(3) << p->kill_count << ' ' << std::setw(3) << p->assist_count << ' '
-            << std::setw(3) << p->death_count << ' ' << std::setw(6) << std::fixed
-            << std::setprecision(1) << p->adr << ' ' << std::setw(6) << ttd << ' ' << std::setw(5)
-            << p->headshot_percent << ' ' << std::setw(5) << std::setprecision(2) << rtg << '\n';
+            << std::setw(6) << rank << ' ' << std::setw(3) << p->kill_count << ' ' << std::setw(3)
+            << p->assist_count << ' ' << std::setw(3) << p->death_count << ' ' << std::setw(6)
+            << std::fixed << std::setprecision(1) << p->adr << ' ' << std::setw(6) << ttd << ' '
+            << std::setw(5) << p->headshot_percent << ' ' << std::setw(5) << std::setprecision(2)
+            << rtg << '\n';
     }
     if (players.empty()) {
         out << kAnsiMuted << "  (no players)" << kAnsiReset << '\n';

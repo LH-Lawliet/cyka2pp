@@ -71,6 +71,9 @@ Match build_match(RawMatch raw, std::string file_hash) {
         p.user_id = rp.user_id;
         p.team = rp.team_letter.empty() ? "A" : rp.team_letter;
         p.mvp_count = rp.mvp_count;
+        p.rank_type = rp.rank_type;
+        p.ranking = rp.ranking;
+        p.competitive_wins = rp.competitive_wins;
         p.bomb_planted_count = rp.bomb_planted_count;
         p.bomb_defused_count = rp.bomb_defused_count;
         p.enemies_flashed = rp.enemies_flashed;

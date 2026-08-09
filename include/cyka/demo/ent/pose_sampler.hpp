@@ -17,6 +17,11 @@ struct PlayerIdent {
     bool connected{false};
     /// From CCSPlayerController::m_iMVPs (cumulative in the demo).
     int mvp_count{0};
+    /// CS2 competitive mode for this demo: 7=Wingman, 11=Premier, 12=Comp (6=legacy Comp).
+    int rank_type{0};
+    /// Skill group 0–18 (Wingman/Comp) or CS Rating (Premier).
+    int ranking{0};
+    int competitive_wins{0};
 };
 
 /// One alive-player snapshot at a sampled tick.

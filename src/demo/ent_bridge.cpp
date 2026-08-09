@@ -72,7 +72,8 @@ void EntityBridge::publish_players() {
     sampler_.collect_players(ctx_, idents_);
     for (const auto& id : idents_) {
         listener_.observe_entity_player(std::to_string(id.steam_id), id.name, id.team,
-                                        id.mvp_count);
+                                        id.mvp_count, id.rank_type, id.ranking,
+                                        id.competitive_wins);
     }
 }
 
