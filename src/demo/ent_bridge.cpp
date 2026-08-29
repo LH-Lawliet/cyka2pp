@@ -1,11 +1,12 @@
 #include "cyka/demo/ent_bridge.hpp"
 
 #include "cyka/demo/ent/baselines.hpp"
+#include "cyka/demo/ent/entity.hpp"
 #include "cyka/demo/proto_wire.hpp"
 
 #include <algorithm>
-#include <string>
 #include <cstdint>
+#include <string>
 
 namespace cyka::demo {
 
@@ -71,9 +72,8 @@ void EntityBridge::on_net_msg(const NetMessage& nm) {
 void EntityBridge::publish_players() {
     sampler_.collect_players(ctx_, idents_);
     for (const auto& id : idents_) {
-        listener_.observe_entity_player(std::to_string(id.steam_id), id.name, id.team,
-                                        id.mvp_count, id.rank_type, id.ranking,
-                                        id.competitive_wins);
+        listener_.observe_entity_player(std::to_string(id.steam_id), id.name, id.team, id.mvp_count,
+                                        id.rank_type, id.ranking, id.competitive_wins);
     }
 }
 
@@ -118,8 +118,29 @@ int EntityBridge::health_of(const SteamId& steam) {
     return pose.health;
 }
 
+void EntityBridge::publish_game_rules(Tick tick) {
+    for (ent::Entity* e : ctx_.tracked()) {
+        if (e == nullptr || e->cls() == nullptr || e->cls()->name != "CCSGameRulesProxy") {
+            continue;
+        }
+        const auto reason = e->prop("m_pGameRules.m_eRoundWinReason");
+        const auto status = e->prop("m_pGameRules.m_iRoundWinStatus");
+        const auto played = e->prop("m_pGameRules.m_totalRoundsPlayed");
+        const auto phase = e->prop("m_pGameRules.m_gamePhase");
+        listener_.on_game_rules(tick, reason != nullptr ? static_cast<int>(reason->as_i64()) : 0,
+                                status != nullptr ? static_cast<int>(status->as_i64()) : 0,
+                                played != nullptr ? static_cast<int>(played->as_i64()) : 0,
+                                phase != nullptr ? static_cast<int>(phase->as_i64()) : 0);
+        return;
+    }
+}
+
 void EntityBridge::after_packet(Tick tick) {
-    if (!ctx_.ready() || !sampler_.due(tick)) {
+    if (!ctx_.ready()) {
+        return;
+    }
+    publish_game_rules(tick);
+    if (!sampler_.due(tick)) {
         return;
     }
     sampler_.mark(tick);

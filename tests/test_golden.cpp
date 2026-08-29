@@ -77,3 +77,31 @@ void test_golden() {
         CYKA_CHECK(found);
     }
 }
+
+void test_forfeit() {
+    namespace fs = std::filesystem;
+    const fs::path demo = fs::path(CYKA_SOURCE_DIR) / "testdata/demos/3839591702666936685.dem";
+    if (!fs::exists(demo)) {
+        std::cerr << "skip forfeit: demo missing at " << demo << '\n';
+        return;
+    }
+    cyka::Options opt;
+    opt.format = cyka::OutputFormat::Json;
+    auto result = cyka::analyze_file(demo, opt);
+    CYKA_CHECK(static_cast<bool>(result));
+    if (!result) {
+        return;
+    }
+    const auto& match = *result;
+    CYKA_CHECK(match.map_name == "de_inferno");
+    CYKA_CHECK(match.rounds.size() == 2);
+    CYKA_CHECK(match.team_a && match.team_b);
+    const int a = match.team_a->score;
+    const int b = match.team_b->score;
+    CYKA_CHECK((a == 2 && b == 0) || (a == 0 && b == 2));
+    CYKA_CHECK(match.winner != nullptr);
+    if (match.rounds.size() >= 2 && match.rounds[0] && match.rounds[1]) {
+        CYKA_CHECK(match.rounds[0]->winner == match.rounds[1]->winner);
+        CYKA_CHECK(match.rounds[1]->end_reason == "surrender");
+    }
+}

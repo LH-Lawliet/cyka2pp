@@ -20,12 +20,12 @@ inline void check(bool ok, std::string_view expr, std::string_view file, int lin
 
 } // namespace cyka::test
 
-#define CYKA_CHECK(expr)                                                                           \
-    ::cyka::test::check(static_cast<bool>(expr), #expr, __FILE__, __LINE__)
+#define CYKA_CHECK(expr) ::cyka::test::check(static_cast<bool>(expr), #expr, __FILE__, __LINE__)
 
 void test_ratings();
 void test_cli();
 void test_vision();
 void test_tags();
 void test_golden();
+void test_forfeit();
 void test_steam_id();

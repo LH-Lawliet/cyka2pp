@@ -13,9 +13,12 @@ namespace cyka::demo {
 
 /// Consumes game events + userinfo into a RawMatch (scoreboard-oriented).
 class CollectingListener {
-public:
+  public:
     void on_userinfo(const UserInfoById& users);
     void on_event(Tick tick, const GameEvent& ev);
+    /// CCSGameRulesProxy snapshot (CS2 often omits round_end on surrender).
+    void on_game_rules(Tick tick, int win_reason, int win_status, int rounds_played,
+                       int game_phase);
     void finish();
 
     [[nodiscard]] RawMatch& raw() noexcept { return raw_; }
@@ -58,7 +61,7 @@ public:
         health_lookup_ctx_ = ctx;
     }
 
-private:
+  private:
     [[nodiscard]] SteamId steam_for_userid(std::int32_t userid) const;
     [[nodiscard]] std::string name_for_userid(std::int32_t userid) const;
     void ensure_player(const SteamId& steam, const std::string& name, int userid);
@@ -91,6 +94,8 @@ private:
     int round_number_{0};
     bool round_live_{false};
     bool match_started_{false};
+    bool match_over_{false};
+    bool surrender_recorded_{false};
     Tick freeze_start_{0};
     RawRound pending_{};
     bool have_pending_{false};

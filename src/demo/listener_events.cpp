@@ -15,6 +15,9 @@ namespace {
     case 9:
     case 12:
         return "elimination";
+    case 17:
+    case 18:
+        return "surrender";
     default:
         return reason > 0 ? "reason_" + std::to_string(reason) : "";
     }
@@ -24,10 +27,12 @@ namespace {
     switch (reason) {
     case 1:
     case 9:
+    case 18:      // CT surrendered
         return 2; // T
     case 7:
     case 8:
     case 12:
+    case 17:      // T surrendered
         return 3; // CT
     default:
         return 0;
@@ -35,6 +40,34 @@ namespace {
 }
 
 } // namespace
+
+void CollectingListener::on_game_rules(Tick tick, int win_reason, int win_status,
+                                       [[maybe_unused]] int rounds_played, int game_phase) {
+    // CS2 GAMEPHASE_MATCH_ENDED.
+    if (game_phase >= 5) {
+        match_over_ = true;
+    }
+    if (win_reason != 17 && win_reason != 18) {
+        return;
+    }
+    if (surrender_recorded_) {
+        return;
+    }
+    surrender_recorded_ = true;
+    match_over_ = true;
+    if (have_pending_ && !pending_.winner_letter.empty()) {
+        close_round_inferred(tick);
+    }
+    if (!have_pending_) {
+        begin_round(tick);
+    }
+    int winner = win_status;
+    if (winner < 2 || winner > 3) {
+        winner = winner_from_reason(win_reason);
+    }
+    end_round(tick, winner, reason_name(win_reason));
+    close_round_inferred(tick);
+}
 
 void CollectingListener::on_event(Tick tick, const GameEvent& ev) {
     const std::string& n = ev.name;
@@ -88,6 +121,10 @@ void CollectingListener::on_event(Tick tick, const GameEvent& ev) {
         close_round_inferred(tick);
         return;
     }
+    if (n == "cs_win_panel_match") {
+        match_over_ = true;
+        return;
+    }
     if (n == "player_team") {
         const int uid = ev_int(ev, "userid").value_or(0);
         const int team = ev_int(ev, "team").value_or(0);
@@ -102,7 +139,7 @@ void CollectingListener::on_event(Tick tick, const GameEvent& ev) {
         return;
     }
     if (n == "player_death") {
-        if (!match_started_ || round_number_ == 0) {
+        if (!match_started_ || round_number_ == 0 || match_over_) {
             return;
         }
         if (!have_pending_) {
@@ -139,7 +176,7 @@ void CollectingListener::on_event(Tick tick, const GameEvent& ev) {
         return;
     }
     if (n == "weapon_fire") {
-        if (!match_started_ || round_number_ == 0) {
+        if (!match_started_ || round_number_ == 0 || match_over_) {
             return;
         }
         RawShot s;

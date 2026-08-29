@@ -17,8 +17,8 @@ using cyka::demo::kWireVarint;
 
 /// Classes whose field values we retain; everything else is decode-and-drop.
 bool is_tracked_class(std::string_view name) {
-    static const std::unordered_set<std::string_view> kTracked{"CCSPlayerController",
-                                                               "CCSPlayerPawn"};
+    static const std::unordered_set<std::string_view> kTracked{
+        "CCSPlayerController", "CCSPlayerPawn", "CCSGameRulesProxy"};
     return kTracked.contains(name);
 }
 

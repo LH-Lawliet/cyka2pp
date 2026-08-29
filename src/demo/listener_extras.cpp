@@ -68,7 +68,7 @@ void CollectingListener::on_bomb_defused(const GameEvent& ev) {
 }
 
 void CollectingListener::on_player_hurt(Tick tick, const GameEvent& ev) {
-    if (!match_started_ || round_number_ == 0) {
+    if (!match_started_ || round_number_ == 0 || match_over_) {
         return;
     }
     RawDamage d;

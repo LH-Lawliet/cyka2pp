@@ -51,12 +51,6 @@ Match build_match(RawMatch raw, std::string file_hash) {
     m.team_b->letter = "B";
     m.team_b->score = raw.score_b;
 
-    if (raw.score_a > raw.score_b) {
-        m.winner = std::make_unique<Team>(*m.team_a);
-    } else if (raw.score_b > raw.score_a) {
-        m.winner = std::make_unique<Team>(*m.team_b);
-    }
-
     for (const auto& rp : raw.players) {
         if (!is_individual_steam64(rp.steam_id)) {
             continue;
@@ -200,6 +194,12 @@ Match build_match(RawMatch raw, std::string file_hash) {
         } else if (r->number <= 24) {
             ++t->score_second_half;
         }
+    }
+
+    if (m.team_a->score > m.team_b->score) {
+        m.winner = std::make_unique<Team>(*m.team_a);
+    } else if (m.team_b->score > m.team_a->score) {
+        m.winner = std::make_unique<Team>(*m.team_b);
     }
 
     return m;

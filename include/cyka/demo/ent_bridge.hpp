@@ -17,7 +17,7 @@ namespace cyka::demo {
 /// info, instance baselines and PacketEntities, then feeds discovered players
 /// and per-tick pose samples into the listener.
 class EntityBridge {
-public:
+  public:
     explicit EntityBridge(CollectingListener& listener) : listener_(listener) {}
 
     /// Outer demo frames that carry entity metadata (SendTables, ClassInfo,
@@ -36,8 +36,9 @@ public:
     /// Current pawn HP for steam id, or -1 if not found.
     [[nodiscard]] int health_of(const SteamId& steam);
 
-private:
+  private:
     void publish_players();
+    void publish_game_rules(Tick tick);
 
     CollectingListener& listener_;
     ent::EntityContext ctx_;
