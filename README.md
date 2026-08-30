@@ -47,17 +47,14 @@ and pass it with `--maps-dir` / `CYKA2PP_MAPS_DIR`. Keep that folder out of git.
   players/
     ct_sas.glb                # optional — POV victim mesh (CT)
     t_phoenix.glb             # optional — POV victim mesh (T)
-    textures/                 # PNGs written next to the glTFs
   weapons/
     ak47.glb                  # optional — worldmodels on wpnPivot
     awp.glb
-    deagle.glb
-    m4a4.glb
-    m4a1.glb
-    glock.glb
-    textures/
+    …                         # see scripts/export_cs2_assets.sh for the full set
 ```
 
+Exports are **geometry only** (no materials/textures). cyka2pp raycasts meshes; it
+never samples PNGs.
 - **Without** `.tri` files: parse/scoreboard/highlights still work; aim metrics
   that need walls (TTD, spotted, …) degrade or skip mesh occlusion.
 - **Without** `players/*.glb`: POV dumps use duck-scaled capsules only.
@@ -146,7 +143,12 @@ Source2Viewer-CLI -i "$CSGO/pak01_dir.vpk" \
   -o "$MAPS/weapons/ak47.glb" -d --gltf_export_format glb --gltf_export_materials
 ```
 
-Weapon slugs cyka2pp looks for: `ak47`, `awp`, `deagle`, `m4a4`, `m4a1`, `glock`.
+Weapon slugs cyka2pp looks for (export script writes these): rifles (`ak47`,
+`m4a4`, `m4a1`, `famas`, `galilar`, `aug`, `sg556`), snipers (`awp`, `ssg08`,
+`scar20`, `g3sg1`), pistols (`deagle`, `glock`, `usp`, `hkp2000`, `p250`,
+`fiveseven`, `tec9`, `cz75a`, `elite`, `revolver`), SMGs / shotguns / heavy
+(`mp9`, `mac10`, `mp7`, `ump45`, `p90`, `bizon`, `mp5sd`, `nova`, `xm1014`,
+`mag7`, `sawedoff`, `m249`, `negev`).
 
 ### 5. Clip ↔ demo (POV)
 
