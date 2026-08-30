@@ -7,7 +7,7 @@ Regenerate the interactive gallery:
 
 ```bash
 ./build/cyka2pp analyze testdata/demos/3835689269611987518.dem \
-  --maps-dir ../cs2-maps-tri \
+  --maps-dir "$HOME/cs2-maps-tri" \
   --ttd-trace-dir testdata/ttd-traces \
   --format json --out /tmp/m.json
 ```

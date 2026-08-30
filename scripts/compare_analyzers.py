@@ -2,7 +2,7 @@
 """Compare cyka2pp JSON against awpy (and optional demoinfocs) on corpus demos.
 
 Usage:
-  python3 scripts/compare_analyzers.py [--bin ./build/cyka2pp] [--maps-dir ../cs2-maps-tri]
+  python3 scripts/compare_analyzers.py [--bin ./build/cyka2pp] [--maps-dir $HOME/cs2-maps-tri]
 
 Prints a markdown table to stdout. Exits 1 if a hard mismatch is found on a
 demo that all parsers completed (map name or kill-count delta > 15%).

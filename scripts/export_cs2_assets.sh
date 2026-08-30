@@ -1,14 +1,41 @@
 #!/usr/bin/env bash
 # Export CS2 map collision (.tri), player models+anims, and weapon worldmodels
-# into the sibling maps tree (default: ../cs2-maps-tri). Never write Valve
-# binaries into the cyka2pp repo.
-# Requires: Source2Viewer-CLI on PATH (or SOURCE2VIEWER_CLI), CS2 install, optional demolens.
+# into a private asset directory you choose. Never write Valve binaries into
+# the cyka2pp git tree — pass an absolute path outside this repo.
+#
+# Usage:
+#   ./scripts/export_cs2_assets.sh /path/to/cs2-maps-tri
+#
+# Requires: Source2Viewer-CLI on PATH (or SOURCE2VIEWER_CLI), a CS2 install,
+# optional demolens for DLT1 map .tri files. See README “Local CS2 asset folder”.
 set -euo pipefail
 
 CS2_ROOT="${CS2_ROOT:-$HOME/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive}"
 CSGO="$CS2_ROOT/game/csgo"
-OUT="${1:-$(cd "$(dirname "$0")/../.." && pwd)/cs2-maps-tri}"
+if [[ $# -lt 1 ]]; then
+  echo "usage: $0 /path/to/asset-root" >&2
+  echo "  Create a private folder (e.g. \$HOME/cs2-maps-tri) outside cyka2pp." >&2
+  echo "  Do not export into this repository." >&2
+  exit 2
+fi
+OUT="$1"
 CLI="${SOURCE2VIEWER_CLI:-Source2Viewer-CLI}"
+
+if ! command -v "$CLI" >/dev/null 2>&1; then
+  echo "error: $CLI not found on PATH (install Source 2 Viewer CLI)" >&2
+  exit 1
+fi
+
+# Refuse exporting into the cyka2pp source tree.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT_ABS="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
+case "$OUT_ABS" in
+  "$REPO_ROOT"|"$REPO_ROOT"/*)
+    echo "error: refusing to write Valve assets under cyka2pp ($OUT_ABS)" >&2
+    echo "       pick a path outside the repo (e.g. \$HOME/cs2-maps-tri)." >&2
+    exit 1
+    ;;
+esac
 
 ANIMS='animation/anims/world/rifle/_default_rifle/idle_rifle,animation/anims/world/rifle/_default_rifle/run_n_rifle,animation/anims/world/rifle/_default_rifle/idle_crouch_rifle,animation/anims/world/rifle/_default_rifle/crouch_n_rifle'
 
