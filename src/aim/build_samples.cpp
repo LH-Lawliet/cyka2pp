@@ -9,6 +9,24 @@
 namespace cyka::aim {
 namespace {
 
+void stamp_weapons(Samples& out) {
+    // Walk shots in tick order; keep last-known weapon per steam id.
+    std::unordered_map<SteamId, std::string> last;
+    std::size_t si = 0;
+    for (Frame& fr : out.frames) {
+        while (si < out.shots.size() && out.shots[si].tick <= fr.tick) {
+            last[out.shots[si].steam_id] = out.shots[si].weapon;
+            ++si;
+        }
+        for (FramePose& pose : fr.poses) {
+            if (auto it = last.find(pose.steam_id); it != last.end()) {
+                pose.weapon = it->second;
+            }
+        }
+    }
+}
+
+
 void attach_speed_only(ShotSample& sh, const std::vector<Frame>& frames) {
     for (int i = static_cast<int>(frames.size()) - 1; i >= 0; --i) {
         const Frame& fr = frames[static_cast<std::size_t>(i)];
@@ -71,7 +89,7 @@ Samples build_samples(const demo::RawMatch& raw) {
         }
         FramePose pose;
         pose.steam_id = rp.steam_id;
-        pose.team = rp.team_letter;
+        pose.team_letter = rp.team_letter;
         pose.pos = {rp.x, rp.y, rp.z};
         pose.pitch = rp.pitch;
         pose.yaw = rp.yaw;
@@ -79,6 +97,8 @@ Samples build_samples(const demo::RawMatch& raw) {
         pose.scoped = rp.scoped;
         pose.airborne = rp.airborne;
         pose.health = rp.health;
+        pose.duck_amount = rp.duck_amount;
+        pose.team_num = rp.team_num;
         pose.speed = -1;
         if (auto pit = prev.find(rp.steam_id); pit != prev.end()) {
             const auto* a = pit->second;
@@ -141,6 +161,7 @@ Samples build_samples(const demo::RawMatch& raw) {
         ds.victim_id = d.victim_steam;
         out.damages.push_back(std::move(ds));
     }
+    stamp_weapons(out);
     return out;
 }
 

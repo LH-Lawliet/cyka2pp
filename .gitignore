@@ -5,3 +5,11 @@
 .cache/
 
 /build-*/
+testdata/demos/*.dem
+testdata/demos/*.part
+testdata/ttd-traces/**
+!testdata/ttd-traces/README.md
+# Valve player/weapon glTF exports (local only; see testdata/gltf/README.md)
+testdata/gltf/**/*.glb
+testdata/gltf/**/textures/
+exceptions.txt

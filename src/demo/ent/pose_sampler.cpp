@@ -2,6 +2,7 @@
 
 #include "cyka/demo/steam_id.hpp"
 
+#include <algorithm>
 #include <string>
 
 namespace cyka::demo::ent {
@@ -29,6 +30,11 @@ const std::string kHealth = "m_iHealth";
 const std::string kIsScoped = "m_bIsScoped";
 const std::string kLifeState = "m_lifeState";
 const std::string kGroundEntity = "m_hGroundEntity";
+// demoinfocs-golang / CS2 networked duck (MovementServices on the pawn).
+const std::string kDuckAmount = "m_pMovementServices.m_flDuckAmount";
+const std::string kDucked = "m_pMovementServices.m_bDucked";
+const std::string kDucking = "m_pMovementServices.m_bDucking";
+const std::string kFlags = "m_fFlags";
 
 /// Source 2 splits world coordinates into a 9-bit cell index plus an offset.
 double coord_from_cell(std::uint64_t cell, float offset) {
@@ -74,9 +80,9 @@ bool fill_pose(const EntityContext& ctx, const Entity& controller, PoseSample& s
     }
     s.steam_id = steam->as_u64();
     if (const auto* t = controller.prop(kTeamNum); t != nullptr) {
-        s.team = static_cast<int>(t->as_u64());
+        s.team_num = static_cast<int>(t->as_u64());
     }
-    if (s.team != 2 && s.team != 3) {
+    if (s.team_num != 2 && s.team_num != 3) {
         return false;
     }
     if (const auto* hp = pawn->prop(kHealth); hp != nullptr) {
@@ -100,6 +106,25 @@ bool fill_pose(const EntityContext& ctx, const Entity& controller, PoseSample& s
     if (const auto ge = pawn->prop_u64(kGroundEntity); ge) {
         s.airborne = *ge == kInvalidHandle;
     }
+
+    // Prefer continuous duck amount; GOTV often leaves it near 0, so fall back
+    // to ducked/ducking bools and FL_DUCKING on m_fFlags.
+    float duck = 0.f;
+    if (const auto* d = pawn->prop(kDuckAmount); d != nullptr) {
+        duck = std::clamp(d->as_f32(), 0.f, 1.f);
+    }
+    if (const auto* ducked = pawn->prop(kDucked); ducked != nullptr && ducked->as_bool()) {
+        duck = std::max(duck, 1.f);
+    } else if (const auto* ducking = pawn->prop(kDucking); ducking != nullptr && ducking->as_bool()) {
+        duck = std::max(duck, 0.85f);
+    }
+    if (const auto* flags = pawn->prop(kFlags); flags != nullptr) {
+        constexpr std::uint64_t kFlDucking = 1ULL << 1; // Source FL_DUCKING
+        if ((flags->as_u64() & kFlDucking) != 0) {
+            duck = std::max(duck, 1.f);
+        }
+    }
+    s.duck_amount = duck;
     return true;
 }
 
@@ -122,7 +147,7 @@ void PoseSampler::collect_players(const EntityContext& ctx, std::vector<PlayerId
             id.name = n->s;
         }
         if (const auto* t = e->prop(kTeamNum); t != nullptr) {
-            id.team = static_cast<int>(t->as_u64());
+            id.team_num = static_cast<int>(t->as_u64());
         }
         if (const auto* c = e->prop(kConnected); c != nullptr) {
             id.connected = c->as_u64() == 0; // PlayerConnectedState::Connected
@@ -140,7 +165,7 @@ void PoseSampler::collect_players(const EntityContext& ctx, std::vector<PlayerId
             id.competitive_wins = static_cast<int>(rw->as_i64());
         }
         // Spectators / disconnected controllers still appear in PacketEntities.
-        if (!id.connected || (id.team != 2 && id.team != 3)) {
+        if (!id.connected || (id.team_num != 2 && id.team_num != 3)) {
             continue;
         }
         out.push_back(std::move(id));

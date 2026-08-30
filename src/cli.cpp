@@ -1,6 +1,7 @@
 #include "cyka/cli.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <unistd.h>
@@ -66,20 +67,24 @@ namespace {
 } // namespace
 
 void print_help(std::string_view prog) {
-    std::cout
-        << "Usage: " << prog << " analyze <demo.dem> [options]\n\n"
-        << "cyka2pp — CS2 demo analyzer in C++26 for cykaslayer.\n"
-        << "Parse → metrics → aim → highlights.\n\n"
-        << "Options:\n"
-        << "  --maps-dir <dir>     Directory of .tri map meshes\n"
-        << "  --format <fmt>       json | table (default: table on TTY, else json)\n"
-        << "  --sections <list>    Table sections (comma-separated). Default:\n"
-        << "                       scoreboard,clutches,aim,highlights\n"
-        << "                       Also: rounds, kills, all\n"
-        << "  --out <path>         Write JSON to this file\n"
-        << "  --minify             Compact JSON\n"
-        << "  --steam-id <id>      Limit highlights (repeatable)\n"
-        << "  -h, --help           Show this help\n";
+    std::cout << "Usage: " << prog << " analyze <demo.dem> [options]\n\n"
+              << "cyka2pp — CS2 demo analyzer in C++26 for cykaslayer.\n"
+              << "Parse → metrics → aim → highlights.\n\n"
+              << "Options:\n"
+              << "  --maps-dir <dir>     Directory of .tri map meshes\n"
+              << "  --format <fmt>       json | table (default: table on TTY, else json)\n"
+              << "  --sections <list>    Table sections (comma-separated). Default:\n"
+              << "                       scoreboard,clutches,aim,highlights\n"
+              << "                       Also: rounds, kills, all\n"
+              << "  --out <path>         Write JSON to this file\n"
+              << "  --ttd-size WxH       TTD/POV raycast resolution every tick (default 640x360)\n"
+              << "  --ttd-max-lookback S Max seconds before shot to search for first sight when\n"
+              << "                       computing TTD (default 2). Longer holds omit TTD.\n"
+              << "                       Does not affect spotted/crosshair/counter-strafe.\n"
+              << "  --ttd-trace-dir <d>  Shooter-POV BMP frames (walls/smoke) for TTD\n"
+              << "  --minify             Compact JSON\n"
+              << "  --steam-id <id>      Limit highlights (repeatable)\n"
+              << "  -h, --help           Show this help\n";
 }
 
 Args parse_args(std::span<char*> argv) {
@@ -135,6 +140,32 @@ Args parse_args(std::span<char*> argv) {
             }
         } else if (a == "--out") {
             cli.options.out_path = need("--out");
+        } else if (a == "--ttd-trace-dir") {
+            cli.options.ttd_trace_dir = need("--ttd-trace-dir");
+        } else if (a == "--ttd-size" || a == "--ttd-trace-size") {
+            // --ttd-trace-size is a deprecated alias of --ttd-size (same grid for TTD + dumps).
+            const auto v = need(a);
+            int w = 0;
+            int h = 0;
+            if (std::sscanf(std::string(v).c_str(), "%dx%d", &w, &h) != 2 || w < 16 || h < 16 ||
+                w > 3840 || h > 2160) {
+                cli.ok = false;
+                cli.error = std::string("invalid ") + std::string(a) + " (want e.g. 640x360)";
+            } else {
+                cli.options.ttd_w = w;
+                cli.options.ttd_h = h;
+            }
+        } else if (a == "--ttd-max-lookback") {
+            const auto v = need("--ttd-max-lookback");
+            const std::string vs{v};
+            char* end = nullptr;
+            const double s = std::strtod(vs.c_str(), &end);
+            if (end == vs.c_str() || *end != '\0' || s < 0 || s > 60) {
+                cli.ok = false;
+                cli.error = "invalid --ttd-max-lookback (want seconds in [0, 60], e.g. 2)";
+            } else {
+                cli.options.ttd_max_lookback_s = s;
+            }
         } else if (a == "--minify") {
             cli.options.minify = true;
         } else if (a == "--steam-id") {

@@ -10,7 +10,8 @@ namespace cyka::aim {
 
 struct FramePose {
     SteamId steam_id;
-    std::string team; // A|B
+    /// Match side letter A|B (not CS team number — see `team_num`).
+    std::string team_letter;
     Vec3 pos{};
     double pitch{0};
     double yaw{0};
@@ -19,7 +20,14 @@ struct FramePose {
     bool scoped{false};
     bool airborne{false};
     int health{0};
+    /// 0 = standing, 1 = fully ducked (from demo movement services).
+    float duck_amount{0};
+    /// CS team number when known (2 = T, 3 = CT).
+    int team_num{0};
+    /// Active weapon display name (for worldmodel attach via `weapon_asset_slug`).
+    std::string weapon;
 };
+
 
 struct Frame {
     Tick tick{0};

@@ -109,10 +109,14 @@ set(CYKA_LIB_SOURCES
     src/aim/build_samples.cpp
     src/aim/compute.cpp
     src/aim/los_batch.cpp
+    src/aim/visibility_batch.cpp
     src/aim/ttd.cpp
+    src/aim/ttd_trace.cpp
+    src/aim/gltf_player.cpp
     src/aim/spray.cpp
     src/aim/counter_strafe.cpp
     src/aim/spotted.cpp
+    src/aim/shot_visible.cpp
     src/aim/crosshair.cpp
     src/csdata/weapons.cpp
     src/csdata/spray_tables.cpp
@@ -125,6 +129,7 @@ set(CYKA_LIB_SOURCES
 
 add_library(cyka_core STATIC ${CYKA_LIB_SOURCES})
 target_include_directories(cyka_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(cyka_core PRIVATE ${CMAKE_SOURCE_DIR}/third_party/cgltf)
 target_link_libraries(cyka_core PUBLIC
     nlohmann_json::nlohmann_json
     Threads::Threads
@@ -142,6 +147,8 @@ add_executable(cyka2pp-tests
     tests/test_vision.cpp
     tests/test_tags.cpp
     tests/test_golden.cpp
+    tests/test_corpus.cpp
+    tests/test_ttd_trace.cpp
     tests/test_steam_id.cpp
 )
 target_link_libraries(cyka2pp-tests PRIVATE cyka_core)

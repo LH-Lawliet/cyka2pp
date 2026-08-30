@@ -72,7 +72,7 @@ void EntityBridge::on_net_msg(const NetMessage& nm) {
 void EntityBridge::publish_players() {
     sampler_.collect_players(ctx_, idents_);
     for (const auto& id : idents_) {
-        listener_.observe_entity_player(std::to_string(id.steam_id), id.name, id.team, id.mvp_count,
+        listener_.observe_entity_player(std::to_string(id.steam_id), id.name, id.team_num, id.mvp_count,
                                         id.rank_type, id.ranking, id.competitive_wins);
     }
 }
@@ -155,7 +155,8 @@ void EntityBridge::after_packet(Tick tick) {
         out.tick = tick;
         out.round_number = listener_.round_number();
         out.steam_id = std::to_string(p.steam_id);
-        out.team_letter = listener_.team_letter(p.team);
+        out.team_letter = listener_.team_letter(p.team_num);
+        out.team_num = p.team_num;
         out.x = p.x;
         out.y = p.y;
         out.z = p.z;
@@ -164,6 +165,7 @@ void EntityBridge::after_packet(Tick tick) {
         out.health = p.health;
         out.scoped = p.scoped;
         out.airborne = p.airborne;
+        out.duck_amount = p.duck_amount;
         listener_.add_pose(std::move(out));
     }
 }

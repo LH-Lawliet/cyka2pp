@@ -214,6 +214,39 @@ void CollectingListener::on_event(Tick tick, const GameEvent& ev) {
         bomb_state_ = "exploded";
         return;
     }
+    if (n == "smokegrenade_detonate") {
+        RawSmoke s;
+        s.start_tick = tick;
+        s.x = static_cast<double>(ev_float(ev, "x").value_or(0));
+        s.y = static_cast<double>(ev_float(ev, "y").value_or(0));
+        s.z = static_cast<double>(ev_float(ev, "z").value_or(0));
+        raw_.smokes.push_back(s);
+        return;
+    }
+    if (n == "smokegrenade_expired") {
+        const double x = static_cast<double>(ev_float(ev, "x").value_or(0));
+        const double y = static_cast<double>(ev_float(ev, "y").value_or(0));
+        const double z = static_cast<double>(ev_float(ev, "z").value_or(0));
+        RawSmoke* best = nullptr;
+        double best_d = 1e18;
+        for (auto& s : raw_.smokes) {
+            if (s.end_tick != 0) {
+                continue;
+            }
+            const double dx = s.x - x;
+            const double dy = s.y - y;
+            const double dz = s.z - z;
+            const double d = dx * dx + dy * dy + dz * dz;
+            if (d < best_d) {
+                best_d = d;
+                best = &s;
+            }
+        }
+        if (best != nullptr) {
+            best->end_tick = tick;
+        }
+        return;
+    }
 }
 
 } // namespace cyka::demo

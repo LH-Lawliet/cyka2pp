@@ -1,8 +1,7 @@
 #include "cyka/aim/enrich.hpp"
 
 #include "cyka/aim/compute.hpp"
-#include "cyka/aim/los_batch.hpp"
-#include "cyka/aim/ttd.hpp"
+#include "cyka/aim/ttd_trace.hpp"
 #include "cyka/geom/mesh.hpp"
 
 #include <memory>
@@ -34,13 +33,15 @@ void enrich(Match& match, const Options& options, const demo::RawMatch& raw, Sam
         }
     }
     match.aim_meta.mesh_loaded = mesh != nullptr;
-    if (!mesh) {
-        enrich_from_samples(match, nullptr, samples);
+    const int ttd_w = options.ttd_w;
+    const int ttd_h = options.ttd_h;
+    enrich_from_samples(match, samples, mesh.get(), ttd_w, ttd_h, options.ttd_max_lookback_s);
+    if (options.ttd_trace_dir.empty()) {
         return;
     }
-    const LosBatch los = precompute_los(*mesh, samples);
-    enrich_from_samples(match, &los, samples);
-    attach_kill_ttd(match, los, samples);
+    // Pixel-grid visibility only — skip the 18-sample LosBatch (expensive, unused for borders).
+    (void)write_ttd_traces(match, samples, nullptr, options.ttd_trace_dir, mesh.get(), &raw.smokes,
+                           ttd_w, ttd_h, options.maps_dir);
 }
 
 } // namespace cyka::aim

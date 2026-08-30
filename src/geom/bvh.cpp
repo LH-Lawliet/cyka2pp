@@ -118,4 +118,44 @@ bool Mesh::occluded(Vec3 from, Vec3 to) const noexcept {
     return false;
 }
 
+Mesh::Hit Mesh::closest_hit(Vec3 from, Vec3 to) const noexcept {
+    Hit best;
+    if (nodes_.empty()) {
+        return best;
+    }
+    const Vec3 dir = to.sub(from);
+    const Vec3 inv{1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z};
+    std::array<int, 64> stack{};
+    int sp = 0;
+    stack[static_cast<std::size_t>(sp++)] = 0;
+    while (sp > 0) {
+        const BvhNode& nd = nodes_[static_cast<std::size_t>(stack[static_cast<std::size_t>(--sp)])];
+        if (!slab_hit(from, inv, nd.min, nd.max)) {
+            continue;
+        }
+        if (nd.left < 0) {
+            for (int i = nd.start; i < nd.end; ++i) {
+                const Triangle& tri =
+                    tris_[static_cast<std::size_t>(order_[static_cast<std::size_t>(i)])];
+                if (auto t = tri.intersect(from, dir); t && (!best.ok || *t < best.t)) {
+                    best.ok = true;
+                    best.t = *t;
+                    Vec3 n = tri.e1.cross(tri.e2).normalize();
+                    if (n.dot(dir) > 0) {
+                        n = n.mul(-1);
+                    }
+                    best.n = n;
+                }
+            }
+            continue;
+        }
+        if (sp + 2 <= static_cast<int>(stack.size())) {
+            stack[static_cast<std::size_t>(sp)] = nd.left;
+            stack[static_cast<std::size_t>(sp + 1)] = nd.right;
+            sp += 2;
+        }
+    }
+    return best;
+}
+
 } // namespace cyka::geom

@@ -1,6 +1,11 @@
 #include "cyka/aim/los_batch.hpp"
 
+#include "cyka/aim/player_hitbox.hpp"
+#include "cyka/parallel.hpp"
+
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -12,60 +17,78 @@ struct PoseKey {
     double x{0};
     double y{0};
     double z{0};
-    bool operator==(const PoseKey& o) const noexcept {
-        return x == o.x && y == o.y && z == o.z;
+    bool operator==(const PoseKey& other) const noexcept {
+        return x == other.x && y == other.y && z == other.z;
     }
 };
 
 struct CacheEntry {
     PoseKey eye{};
-    PoseKey tgt{};
-    bool clear{false};
+    PoseKey feet{};
+    double yaw{0};
+    float duck_amount{0};
+    std::uint32_t mask{0};
 };
 
-[[nodiscard]] PoseKey eye_of(const FramePose& p) noexcept {
-    return {p.pos.x, p.pos.y, p.pos.z + 64.0};
-}
-[[nodiscard]] PoseKey tgt_of(const FramePose& p) noexcept {
-    return {p.pos.x, p.pos.y, p.pos.z + 40.0};
+[[nodiscard]] PoseKey eye_key(const FramePose& pose) noexcept {
+    const Vec3 eye = player_eye(pose);
+    return {eye.x, eye.y, eye.z};
 }
 
-void fill_chunk(const geom::Mesh& mesh, const Samples& samples, std::size_t begin, std::size_t end,
-                std::vector<LosBatch::PairSet>& out) {
+[[nodiscard]] std::uint32_t trace_hitbox(const geom::Mesh& mesh, Vec3 from,
+                                         const FramePose& enemy) {
+    std::uint32_t mask = 0;
+    const auto points = hitbox_los_points(enemy);
+    for (int i = 0; i < kHitboxLosRays; ++i) {
+        if (!mesh.occluded(from, points[static_cast<std::size_t>(i)])) {
+            mask |= static_cast<std::uint32_t>(1u) << i;
+        }
+    }
+    return mask;
+}
+
+void fill_chunk(
+    const geom::Mesh& mesh, const Samples& samples, std::size_t begin, std::size_t end,
+    std::vector<LosBatch::PairSet>& clear_out,
+    std::vector<std::unordered_map<LosBatch::Pair, std::uint32_t, PairHash>>& mask_out) {
     std::unordered_map<LosBatch::Pair, CacheEntry, PairHash> cache;
-    for (std::size_t fi = begin; fi < end; ++fi) {
-        const Frame& fr = samples.frames[fi];
+    for (std::size_t frame_i = begin; frame_i < end; ++frame_i) {
+        const Frame& frame = samples.frames[frame_i];
         LosBatch::PairSet clear;
+        std::unordered_map<LosBatch::Pair, std::uint32_t, PairHash> masks;
         std::unordered_map<LosBatch::Pair, CacheEntry, PairHash> next;
-        for (const auto& sh : fr.poses) {
-            if (!sh.alive) {
+        for (const auto& shooter : frame.poses) {
+            if (!shooter.alive) {
                 continue;
             }
-            const PoseKey eye = eye_of(sh);
-            for (const auto& en : fr.poses) {
-                if (!en.alive || en.steam_id == sh.steam_id || en.team.empty() ||
-                    en.team == sh.team) {
+            const PoseKey eye = eye_key(shooter);
+            const Vec3 from{eye.x, eye.y, eye.z};
+            for (const auto& enemy : frame.poses) {
+                if (!enemy.alive || enemy.steam_id == shooter.steam_id ||
+                    enemy.team_letter.empty() || enemy.team_letter == shooter.team_letter) {
                     continue;
                 }
-                const auto key = LosBatch::Pair{sh.steam_id, en.steam_id};
-                const PoseKey tgt = tgt_of(en);
-                bool is_clear = false;
+                const auto key = LosBatch::Pair{shooter.steam_id, enemy.steam_id};
+                const PoseKey feet{enemy.pos.x, enemy.pos.y, enemy.pos.z};
+                std::uint32_t mask = 0;
                 if (auto it = cache.find(key); it != cache.end() && it->second.eye == eye &&
-                                               it->second.tgt == tgt) {
-                    is_clear = it->second.clear;
+                                               it->second.feet == feet &&
+                                               it->second.yaw == enemy.yaw &&
+                                               it->second.duck_amount == enemy.duck_amount) {
+                    mask = it->second.mask;
                 } else {
-                    Vec3 from{eye.x, eye.y, eye.z};
-                    Vec3 to{tgt.x, tgt.y, tgt.z};
-                    is_clear = !mesh.occluded(from, to);
+                    mask = trace_hitbox(mesh, from, enemy);
                 }
-                next[key] = CacheEntry{eye, tgt, is_clear};
-                if (is_clear) {
+                next[key] = CacheEntry{eye, feet, enemy.yaw, enemy.duck_amount, mask};
+                if (mask != 0) {
                     clear.insert(key);
+                    masks[key] = mask;
                 }
             }
         }
         cache = std::move(next);
-        out[fi] = std::move(clear);
+        clear_out[frame_i] = std::move(clear);
+        mask_out[frame_i] = std::move(masks);
     }
 }
 
@@ -84,9 +107,10 @@ std::size_t frame_index_at_or_before(const Samples& samples, Tick tick) noexcept
 
 LosBatch precompute_los(const geom::Mesh& mesh, const Samples& samples) {
     LosBatch batch;
-    const std::size_t n = samples.frames.size();
-    batch.clear.resize(n);
-    if (n == 0) {
+    const std::size_t frame_count = samples.frames.size();
+    batch.clear.resize(frame_count);
+    batch.hitbox_rays.resize(frame_count);
+    if (frame_count == 0) {
         return batch;
     }
 
@@ -94,24 +118,23 @@ LosBatch precompute_los(const geom::Mesh& mesh, const Samples& samples) {
     if (workers == 0) {
         workers = 4;
     }
-    workers = std::min<unsigned>(workers, static_cast<unsigned>(n));
-    const std::size_t chunk = (n + workers - 1) / workers;
-
-    std::vector<std::thread> threads;
-    threads.reserve(workers);
-    for (unsigned w = 0; w < workers; ++w) {
-        const std::size_t begin = static_cast<std::size_t>(w) * chunk;
-        if (begin >= n) {
-            break;
+    if (const char* env = std::getenv("CYKA_THREADS")) {
+        const int parsed = std::atoi(env);
+        if (parsed > 0) {
+            workers = static_cast<unsigned>(parsed);
         }
-        const std::size_t end = std::min(n, begin + chunk);
-        threads.emplace_back([&mesh, &samples, begin, end, &batch] {
-            fill_chunk(mesh, samples, begin, end, batch.clear);
-        });
     }
-    for (auto& t : threads) {
-        t.join();
-    }
+    workers = std::min<unsigned>(workers, static_cast<unsigned>(frame_count));
+    const std::size_t chunk = (frame_count + workers - 1) / workers;
+
+    parallel_for(workers, [&](std::size_t worker) {
+        const std::size_t begin = worker * chunk;
+        if (begin >= frame_count) {
+            return;
+        }
+        const std::size_t end = std::min(frame_count, begin + chunk);
+        fill_chunk(mesh, samples, begin, end, batch.clear, batch.hitbox_rays);
+    });
     return batch;
 }
 

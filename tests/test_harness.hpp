@@ -28,4 +28,6 @@ void test_vision();
 void test_tags();
 void test_golden();
 void test_forfeit();
+void test_corpus();
+void test_ttd_trace();
 void test_steam_id();

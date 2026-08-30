@@ -5,6 +5,7 @@
 #include "cyka/aim/spotted.hpp"
 #include "cyka/aim/spray.hpp"
 #include "cyka/aim/ttd.hpp"
+#include "cyka/aim/visibility_batch.hpp"
 
 #include <algorithm>
 #include <map>
@@ -48,7 +49,8 @@ constexpr double kTtdMinMs = 1.0;
 
 } // namespace
 
-void enrich_from_samples(Match& match, const LosBatch* los, Samples& samples) {
+void enrich_from_samples(Match& match, Samples& samples, const geom::Mesh* mesh, int ttd_w,
+                         int ttd_h, double ttd_max_lookback_s) {
     mark_hits(samples);
 
     std::map<SteamId, int> shots;
@@ -68,10 +70,12 @@ void enrich_from_samples(Match& match, const LosBatch* los, Samples& samples) {
 
     spray_enrich(match, samples.shots);
 
-    if (los == nullptr || samples.frames.empty()) {
+    if (mesh == nullptr || samples.frames.empty() || ttd_w < 1 || ttd_h < 1) {
         return;
     }
-    for (auto& [sid, xs] : compute_ttd(*los, samples)) {
+    const double tr = match.tickrate > 0 ? match.tickrate : 64.0;
+    const VisibilityBatch vis = make_visibility_batch(samples, *mesh, ttd_w, ttd_h, tr);
+    for (auto& [sid, xs] : compute_ttd(samples, vis, ttd_max_lookback_s)) {
         auto pit = match.players.find(sid);
         if (pit == match.players.end()) {
             continue;
@@ -83,9 +87,10 @@ void enrich_from_samples(Match& match, const LosBatch* los, Samples& samples) {
             a.time_to_damage_ms = *med;
         }
     }
-    counter_strafe_enrich(*los, match, samples);
-    spotted_enrich(*los, match, samples);
-    crosshair_enrich(*los, match, samples);
+    attach_kill_ttd(match, samples, vis, ttd_max_lookback_s);
+    counter_strafe_enrich(vis, match, samples);
+    spotted_enrich(vis, match, samples);
+    crosshair_enrich(vis, match, samples);
 }
 
 } // namespace cyka::aim

@@ -234,6 +234,12 @@ void CollectingListener::finish() {
         kept.push_back(std::move(r));
     }
     raw_.rounds = std::move(kept);
+    const int smoke_life = static_cast<int>((raw_.tickrate > 0 ? raw_.tickrate : 64.0) * 20.0);
+    for (auto& s : raw_.smokes) {
+        if (s.end_tick == 0) {
+            s.end_tick = s.start_tick + smoke_life;
+        }
+    }
 }
 
 } // namespace cyka::demo

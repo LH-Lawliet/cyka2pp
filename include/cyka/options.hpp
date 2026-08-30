@@ -43,6 +43,14 @@ struct Options {
     std::filesystem::path maps_dir;
     OutputFormat format{OutputFormat::Json};
     std::filesystem::path out_path;
+    std::filesystem::path ttd_trace_dir;
+    /// TTD / POV-trace raycast grid (every tick).
+    int ttd_w{640};
+    int ttd_h{360};
+    /// Max seconds to walk back from a damage/kill when computing TTD (default 2).
+    /// If continuous sight is already open at that floor, TTD is omitted for that event.
+    /// Does not affect spotted / crosshair / counter-strafe.
+    double ttd_max_lookback_s{2.0};
     bool minify{false};
     std::vector<SteamId> steam_ids;
     TableSections sections{TableSections::defaults()};

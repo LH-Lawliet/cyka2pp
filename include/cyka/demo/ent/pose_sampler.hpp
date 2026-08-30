@@ -13,7 +13,7 @@ namespace cyka::demo::ent {
 struct PlayerIdent {
     std::uint64_t steam_id{0};
     std::string name;
-    int team{0}; // 2 = T, 3 = CT
+    int team_num{0}; // 2 = T, 3 = CT
     bool connected{false};
     /// From CCSPlayerController::m_iMVPs (cumulative in the demo).
     int mvp_count{0};
@@ -27,7 +27,7 @@ struct PlayerIdent {
 /// One alive-player snapshot at a sampled tick.
 struct PoseSample {
     std::uint64_t steam_id{0};
-    int team{0};
+    int team_num{0};
     double x{0};
     double y{0};
     double z{0};
@@ -36,6 +36,8 @@ struct PoseSample {
     int health{0};
     bool scoped{false};
     bool airborne{false};
+    /// 0 = standing, 1 = fully ducked (`m_pMovementServices.m_flDuckAmount`).
+    float duck_amount{0};
 };
 
 /// Pulls player identities and poses out of the live entity set.

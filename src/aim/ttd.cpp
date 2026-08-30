@@ -1,106 +1,133 @@
 #include "cyka/aim/ttd.hpp"
 
-#include "cyka/aim/los_batch.hpp"
-#include "cyka/aim/vision.hpp"
+#include "cyka/parallel.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace cyka::aim {
 namespace {
 
-constexpr double kTtdHalfFovDeg = 50.0;
+using Pair = LosBatch::Pair;
+
+/// Continuous sight start ending at `last`, searching no earlier than `floor`.
+/// Returns nullopt if not visible at `last`, or if the window is still open at `floor`
+/// when `floor` is the lookback cap (sight longer than the allowed lookback).
+[[nodiscard]] std::optional<Tick> sight_start(const VisibilityBatch& vis, Tick last, Tick floor,
+                                              const Pair& key) {
+    if (last < vis.tick_begin || last > vis.tick_end) {
+        return std::nullopt;
+    }
+    if (floor < vis.tick_begin) {
+        floor = vis.tick_begin;
+    }
+    if (floor > last) {
+        floor = last;
+    }
+    if (!vis.visible(last, key.first, key.second)) {
+        return std::nullopt;
+    }
+    Tick start = last;
+    while (start > floor && vis.visible(start - 1, key.first, key.second)) {
+        --start;
+    }
+    // Lookback cap is binding when floor > tick_begin. Still open there ⇒ TTD too long / omit.
+    if (start == floor && floor > vis.tick_begin) {
+        return std::nullopt;
+    }
+    return start;
+}
+
+[[nodiscard]] Tick lookback_floor(Tick last, Tick tick_begin, double tickrate,
+                                  double max_lookback_s) {
+    if (max_lookback_s <= 0 || tickrate <= 0) {
+        return tick_begin;
+    }
+    const auto back = static_cast<Tick>(std::llround(max_lookback_s * tickrate));
+    if (back <= 0 || last < tick_begin + back) {
+        return tick_begin;
+    }
+    return last - back;
+}
 
 } // namespace
 
-std::unordered_map<SteamId, std::vector<double>> compute_ttd(const LosBatch& los,
-                                                             const Samples& samples) {
+std::unordered_map<SteamId, std::vector<double>> compute_ttd(const Samples& samples,
+                                                             const VisibilityBatch& vis,
+                                                             double max_lookback_s) {
     std::unordered_map<SteamId, std::vector<double>> out;
-    std::unordered_map<LosBatch::Pair, double, PairHash> sight_since;
-    std::unordered_map<LosBatch::Pair, bool, PairHash> consumed;
+    if (samples.frames.empty() || !vis.ready()) {
+        return out;
+    }
+    const double tr = vis.tickrate > 0 ? vis.tickrate : 64.0;
 
-    struct Ev {
-        double t;
-        int kind;
-        std::size_t i;
-    };
-    std::vector<Ev> evs;
-    for (std::size_t i = 0; i < samples.frames.size(); ++i) {
-        evs.push_back({samples.frames[i].time_s, 0, i});
+    std::vector<std::size_t> order(samples.damages.size());
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
     }
-    for (std::size_t i = 0; i < samples.damages.size(); ++i) {
-        evs.push_back({samples.damages[i].time_s, 1, i});
-    }
-    std::sort(evs.begin(), evs.end(), [](const Ev& a, const Ev& b) {
-        return a.t < b.t || (a.t == b.t && a.kind < b.kind);
+    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+        return samples.damages[a].time_s < samples.damages[b].time_s;
     });
 
-    for (const Ev& e : evs) {
-        if (e.kind == 0) {
-            const Frame& fr = samples.frames[e.i];
-            std::unordered_map<SteamId, bool> alive;
-            for (const auto& sh : fr.poses) {
-                if (sh.alive) {
-                    alive[sh.steam_id] = true;
-                }
-            }
-            for (auto it = sight_since.begin(); it != sight_since.end();) {
-                if (!alive[it->first.first] || !alive[it->first.second]) {
-                    it = sight_since.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-            for (const auto& sh : fr.poses) {
-                if (!sh.alive) {
-                    continue;
-                }
-                Vec3 eye = sh.pos;
-                eye.z += 64;
-                for (const auto& en : fr.poses) {
-                    if (!en.alive || en.steam_id == sh.steam_id || en.team.empty() ||
-                        en.team == sh.team) {
-                        continue;
-                    }
-                    const auto key = LosBatch::Pair{sh.steam_id, en.steam_id};
-                    if (consumed[key]) {
-                        continue;
-                    }
-                    Vec3 tgt = en.pos;
-                    tgt.z += 40;
-                    if (!los.occluded_clear(e.i, sh.steam_id, en.steam_id) ||
-                        !in_half_fov(sh.pitch, sh.yaw, eye, tgt, kTtdHalfFovDeg)) {
-                        sight_since.erase(key);
-                        continue;
-                    }
-                    sight_since.try_emplace(key, fr.time_s);
-                }
-            }
+    struct Job {
+        SteamId attacker;
+        SteamId victim;
+        Tick last;
+        double time_s;
+    };
+    // Preserve time order within each pair; first successful sight wins (same as
+    // the sequential loop — a failed sight does not consume the pair).
+    std::unordered_map<Pair, std::vector<Job>, PairHash> by_pair;
+    for (std::size_t di : order) {
+        const DamageSample& d = samples.damages[di];
+        if (d.tick < vis.tick_begin || d.tick > vis.tick_end) {
             continue;
         }
-        const DamageSample& d = samples.damages[e.i];
-        const auto key = LosBatch::Pair{d.attacker_id, d.victim_id};
-        auto it = sight_since.find(key);
-        if (it == sight_since.end()) {
-            continue;
+        by_pair[{d.attacker_id, d.victim_id}].push_back(
+            {d.attacker_id, d.victim_id, d.tick, d.time_s});
+    }
+    std::vector<Pair> pairs;
+    pairs.reserve(by_pair.size());
+    for (const auto& [key, _] : by_pair) {
+        pairs.push_back(key);
+    }
+
+    std::vector<std::optional<double>> ms_out(pairs.size());
+    parallel_for(pairs.size(), [&](std::size_t i) {
+        const Pair& key = pairs[i];
+        for (const Job& j : by_pair.at(key)) {
+            const Tick floor = lookback_floor(j.last, vis.tick_begin, tr, max_lookback_s);
+            const auto start = sight_start(vis, j.last, floor, key);
+            if (!start) {
+                continue;
+            }
+            const double ms = (j.time_s - static_cast<double>(*start) / tr) * 1000.0;
+            if (ms > 1.0) {
+                ms_out[i] = ms;
+            }
+            return; // pair consumed after first successful sight
         }
-        const double ms = (d.time_s - it->second) * 1000.0;
-        if (ms > 1.0) {
-            out[d.attacker_id].push_back(ms);
+    });
+    for (std::size_t i = 0; i < pairs.size(); ++i) {
+        if (ms_out[i]) {
+            out[pairs[i].first].push_back(*ms_out[i]);
         }
-        consumed[key] = true;
-        sight_since.erase(it);
     }
     return out;
 }
 
-void attach_kill_ttd(Match& match, const LosBatch& los, const Samples& samples) {
-    if (samples.frames.empty() || match.kills.empty()) {
+void attach_kill_ttd(Match& match, const Samples& samples, const VisibilityBatch& vis,
+                     double max_lookback_s) {
+    if (samples.frames.empty() || match.kills.empty() || !vis.ready()) {
         return;
     }
-    const double tr = match.tickrate > 0 ? match.tickrate : 64.0;
-    std::unordered_map<LosBatch::Pair, double, PairHash> sight_since;
+    const double tr = vis.tickrate > 0 ? vis.tickrate : (match.tickrate > 0 ? match.tickrate : 64.0);
     struct KillRef {
         Kill* k;
         double time;
@@ -114,52 +141,23 @@ void attach_kill_ttd(Match& match, const LosBatch& los, const Samples& samples) 
     std::sort(kills.begin(), kills.end(),
               [](const KillRef& a, const KillRef& b) { return a.time < b.time; });
 
-    std::size_t ki = 0;
-    for (std::size_t fi = 0; fi < samples.frames.size(); ++fi) {
-        const Frame& fr = samples.frames[fi];
-        while (ki < kills.size() && kills[ki].time <= fr.time_s + 1e-6) {
-            auto& kr = kills[ki++];
-            const auto key = LosBatch::Pair{kr.k->killer_steam_id, kr.k->victim_steam_id};
-            if (auto it = sight_since.find(key); it != sight_since.end()) {
-                const double ms = (kr.time - it->second) * 1000.0;
-                if (ms > 1.0) {
-                    kr.k->ttd_ms = ms;
-                }
-            }
+    parallel_for(kills.size(), [&](std::size_t i) {
+        KillRef& kr = kills[i];
+        if (kr.k->tick <= vis.tick_begin) {
+            return;
         }
-        for (const auto& sh : fr.poses) {
-            if (!sh.alive) {
-                continue;
-            }
-            Vec3 eye = sh.pos;
-            eye.z += 64;
-            for (const auto& en : fr.poses) {
-                if (!en.alive || en.steam_id == sh.steam_id || en.team.empty() ||
-                    en.team == sh.team) {
-                    continue;
-                }
-                const auto key = LosBatch::Pair{sh.steam_id, en.steam_id};
-                Vec3 tgt = en.pos;
-                tgt.z += 40;
-                if (!los.occluded_clear(fi, sh.steam_id, en.steam_id) ||
-                    !in_half_fov(sh.pitch, sh.yaw, eye, tgt, kTtdHalfFovDeg)) {
-                    sight_since.erase(key);
-                    continue;
-                }
-                sight_since.try_emplace(key, fr.time_s);
-            }
+        const Tick last = kr.k->tick - 1;
+        const Pair key{kr.k->killer_steam_id, kr.k->victim_steam_id};
+        const Tick floor = lookback_floor(last, vis.tick_begin, tr, max_lookback_s);
+        const auto start = sight_start(vis, last, floor, key);
+        if (!start) {
+            return;
         }
-    }
-    for (; ki < kills.size(); ++ki) {
-        auto& kr = kills[ki];
-        const auto key = LosBatch::Pair{kr.k->killer_steam_id, kr.k->victim_steam_id};
-        if (auto it = sight_since.find(key); it != sight_since.end()) {
-            const double ms = (kr.time - it->second) * 1000.0;
-            if (ms > 1.0) {
-                kr.k->ttd_ms = ms;
-            }
+        const double ms = (kr.time - static_cast<double>(*start) / tr) * 1000.0;
+        if (ms > 1.0) {
+            kr.k->ttd_ms = ms;
         }
-    }
+    });
 }
 
 } // namespace cyka::aim

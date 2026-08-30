@@ -90,6 +90,18 @@ struct RawPose {
     int health{0};
     bool scoped{false};
     bool airborne{false};
+    /// 0 = standing, 1 = fully ducked.
+    float duck_amount{0};
+    int team_num{0}; // 2=T 3=CT
+};
+
+
+struct RawSmoke {
+    Tick start_tick{0};
+    Tick end_tick{0}; // 0 = still up at demo end
+    double x{0};
+    double y{0};
+    double z{0};
 };
 
 /// Intermediate parse product before metrics / aim / highlights.
@@ -105,6 +117,7 @@ struct RawMatch {
     std::vector<RawShot> shots;
     std::vector<RawDamage> damages;
     std::vector<RawPose> poses;
+    std::vector<RawSmoke> smokes;
     int score_a{0};
     int score_b{0};
 };

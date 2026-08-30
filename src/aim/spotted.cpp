@@ -1,9 +1,9 @@
 #include "cyka/aim/spotted.hpp"
 
-#include "cyka/aim/vision.hpp"
+#include "cyka/aim/shot_visible.hpp"
+#include "cyka/parallel.hpp"
 
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -16,105 +16,53 @@ namespace {
            weapon != "Incendiary Grenade" && weapon != "Smoke Grenade" && weapon != "Zeus x27";
 }
 
-[[nodiscard]] bool shot_sees_enemy(const LosBatch& los, const Samples& samples, const ShotSample& s,
-                                   const Match& match, double half_fov) {
-    const std::size_t fi = frame_index_at_or_before(samples, s.tick);
-    if (fi == static_cast<std::size_t>(-1)) {
-        return false;
-    }
-    const Frame& fr = samples.frames[fi];
-    const FramePose* shooter = find_pose(fr, s.steam_id);
-    if (shooter == nullptr || !shooter->alive) {
-        return false;
-    }
-    std::string team = shooter->team;
-    if (team.empty()) {
-        if (auto it = match.players.find(s.steam_id); it != match.players.end()) {
-            team = it->second.team;
-        }
-    }
-    Vec3 eye = shooter->pos;
-    eye.z += 64;
-    for (const auto& en : fr.poses) {
-        if (!en.alive || en.steam_id == s.steam_id || en.team == team) {
-            continue;
-        }
-        if (!los.occluded_clear(fi, s.steam_id, en.steam_id)) {
-            continue;
-        }
-        Vec3 tgt = en.pos;
-        tgt.z += 40;
-        if (in_half_fov(shooter->pitch, shooter->yaw, eye, tgt, half_fov)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 } // namespace
 
-void spotted_enrich(const LosBatch& los, Match& match, const Samples& samples) {
+void spotted_enrich(const VisibilityBatch& vis, Match& match, const Samples& samples) {
+    if (!vis.ready()) {
+        return;
+    }
     struct Acc {
         int shots{0};
         int hits{0};
     };
-    std::unordered_map<SteamId, Acc> by;
-    constexpr double kFov = 50.0;
-
-    const std::size_t n = samples.shots.size();
-    std::vector<char> sees(n, 0);
-    unsigned workers = std::thread::hardware_concurrency();
-    if (workers == 0) {
-        workers = 4;
-    }
-    workers = std::min<unsigned>(workers, n == 0 ? 1U : static_cast<unsigned>(n));
-    const std::size_t chunk = n == 0 ? 0 : (n + workers - 1) / workers;
-    std::vector<std::thread> threads;
-    for (unsigned w = 0; w < workers && chunk > 0; ++w) {
-        const std::size_t begin = static_cast<std::size_t>(w) * chunk;
-        if (begin >= n) {
-            break;
+    std::vector<std::size_t> idxs;
+    idxs.reserve(samples.shots.size());
+    for (std::size_t i = 0; i < samples.shots.size(); ++i) {
+        if (is_gun_shot(samples.shots[i].weapon)) {
+            idxs.push_back(i);
         }
-        const std::size_t end = std::min(n, begin + chunk);
-        threads.emplace_back([&, begin, end] {
-            for (std::size_t i = begin; i < end; ++i) {
-                const auto& s = samples.shots[i];
-                if (!is_gun_shot(s.weapon)) {
-                    continue;
-                }
-                if (shot_sees_enemy(los, samples, s, match, kFov)) {
-                    sees[i] = 1;
-                }
-            }
-        });
     }
-    for (auto& t : threads) {
-        t.join();
-    }
-
-    for (std::size_t i = 0; i < n; ++i) {
+    std::vector<char> sees(idxs.size(), 0);
+    parallel_for(idxs.size(), [&](std::size_t i) {
+        if (shot_sees_enemy(vis, match, samples.shots[idxs[i]])) {
+            sees[i] = 1;
+        }
+    });
+    std::unordered_map<SteamId, Acc> by;
+    for (std::size_t i = 0; i < idxs.size(); ++i) {
         if (!sees[i]) {
             continue;
         }
-        const auto& s = samples.shots[i];
-        auto& a = by[s.steam_id];
-        ++a.shots;
-        if (s.hit) {
-            ++a.hits;
+        const ShotSample& shot = samples.shots[idxs[i]];
+        auto& acc = by[shot.steam_id];
+        ++acc.shots;
+        if (shot.hit) {
+            ++acc.hits;
         }
     }
-    for (auto& [sid, a] : by) {
-        if (a.shots == 0) {
+    for (auto& [steam_id, acc] : by) {
+        if (acc.shots == 0) {
             continue;
         }
-        auto pit = match.players.find(sid);
+        auto pit = match.players.find(steam_id);
         if (pit == match.players.end()) {
             continue;
         }
         if (!pit->second.aim) {
             pit->second.aim = PlayerAim{};
         }
-        pit->second.aim->spotted_accuracy_pct = 100.0 * a.hits / a.shots;
+        pit->second.aim->spotted_accuracy_pct = 100.0 * acc.hits / acc.shots;
     }
 }
 
