@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Export CS2 map collision (.tri) and player models+anims into a maps tree.
+# Export CS2 map collision (.tri), player models+anims, and weapon worldmodels
+# into the sibling maps tree (default: ../cs2-maps-tri). Never write Valve
+# binaries into the cyka2pp repo.
 # Requires: Source2Viewer-CLI on PATH (or SOURCE2VIEWER_CLI), CS2 install, optional demolens.
 set -euo pipefail
 
 CS2_ROOT="${CS2_ROOT:-$HOME/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive}"
 CSGO="$CS2_ROOT/game/csgo"
-OUT="${1:-$(dirname "$0")/../../cs2-maps-tri}"
+OUT="${1:-$(cd "$(dirname "$0")/../.." && pwd)/cs2-maps-tri}"
 CLI="${SOURCE2VIEWER_CLI:-Source2Viewer-CLI}"
 
 ANIMS='animation/anims/world/rifle/_default_rifle/idle_rifle,animation/anims/world/rifle/_default_rifle/run_n_rifle,animation/anims/world/rifle/_default_rifle/idle_crouch_rifle,animation/anims/world/rifle/_default_rifle/crouch_n_rifle'

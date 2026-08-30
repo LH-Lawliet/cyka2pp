@@ -29,13 +29,14 @@ than maintaining a multi-repo Go/Python/TS stack.
 Mesh LOS uses DLT1 `.tri` maps + BVH raycasts (batched / multi-threaded).
 Player duck amount from the demo scales hitboxes / eye height and selects
 locomotion clips (`idle` / `run` / `crouch` / `crawl`) that match the glTF
-exports under `--maps-dir/players/` (or local `testdata/gltf/players/` as a
-fallback). Default TTD/POV grid is **640×360**.
+exports under `--maps-dir/players/`. Default TTD/POV grid is **640×360**.
 
 ## CS2 assets (maps + players) via Source 2 Viewer
 
-`--maps-dir` points at a tree of DLT1 `.tri` files (and optionally `players/*.glb`
-+ `weapons/*.glb`). Full extract steps live in
+`--maps-dir` points at a tree of DLT1 `.tri` files plus optional `players/*.glb`
+and `weapons/*.glb`. That tree is the **sibling**
+[`cs2-maps-tri`](../cs2-maps-tri/) repo — Valve binaries are never stored in
+cyka2pp. Full extract steps live in
 [`../cs2-maps-tri/README.md`](../cs2-maps-tri/README.md). Short version:
 
 ```bash
@@ -43,15 +44,11 @@ fallback). Default TTD/POV grid is **640×360**.
 # Maps (collision → DLT1) — demolens wraps Source2Viewer-CLI:
 demolens extract-map --cs2 "$CS2_ROOT" --map de_nuke --vrf Source2Viewer-CLI
 
-# Players + weapon worldmodels (CT/T + idle/run/crouch/crawl anims):
+# Players + weapon worldmodels into the maps tree (default: ../cs2-maps-tri):
 ./scripts/export_cs2_assets.sh ../cs2-maps-tri
-# or into the repo-local fallback (gitignored .glb binaries):
-./scripts/export_cs2_assets.sh testdata/gltf
 ```
 
-Valve `.glb` files under `testdata/gltf/` are **not** committed (see
-`testdata/gltf/README.md`). Credit: [Source 2 Viewer](https://s2v.app) /
-ValveResourceFormat.
+Credit: [Source 2 Viewer](https://s2v.app) / ValveResourceFormat.
 
 ## Install (production / container)
 
@@ -382,7 +379,7 @@ MIT — see [LICENSE](LICENSE).
 
 POV dumps skin the **kill victim** with a budgeted player mesh and attach a
 rifle/pistol worldmodel to `wpnPivot` when `weapons/<slug>.glb` is present next
-to `players/` (under `--maps-dir` or `testdata/gltf`). Other enemies stay
+to `players/` under `--maps-dir` (the `cs2-maps-tri` tree). Other enemies stay
 duck-scaled capsules; analyzer LOS still uses capsules only.
 
 ```bash

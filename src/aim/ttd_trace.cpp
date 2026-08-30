@@ -827,8 +827,8 @@ Result<void> write_ttd_traces(const Match& match, const Samples& samples, const 
     if (ec) {
         return std::unexpected(Error::Io);
     }
-    GltfPlayerCache gltf_cache(maps_dir.empty() ? std::filesystem::path{"testdata/gltf"} : maps_dir);
-    ctx.players = gltf_cache.loaded() ? &gltf_cache : nullptr;
+    GltfPlayerCache gltf_cache(maps_dir);
+    ctx.players = (!maps_dir.empty() && gltf_cache.loaded()) ? &gltf_cache : nullptr;
     const auto traces = collect_ttd_traces(match, samples, los, 16, 16, mesh, ctx.width, ctx.height);
     std::ofstream idx(out_dir / "index.html");
     if (!idx) {

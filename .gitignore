@@ -9,7 +9,7 @@ testdata/demos/*.dem
 testdata/demos/*.part
 testdata/ttd-traces/**
 !testdata/ttd-traces/README.md
-# Valve player/weapon glTF exports (local only; see testdata/gltf/README.md)
-testdata/gltf/**/*.glb
-testdata/gltf/**/textures/
+# Never vendor Valve CS2 assets in this repo — they live in sibling cs2-maps-tri.
+*.glb
+**/pak01_dir.vpk
 exceptions.txt

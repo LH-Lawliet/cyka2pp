@@ -389,16 +389,8 @@ Library& lib() {
 
 std::filesystem::path find_asset(const std::filesystem::path& root, const char* folder,
                                  const std::string& file) {
-    const auto a = root / folder / file;
-    if (std::filesystem::exists(a)) return a;
-    const auto b = std::filesystem::path("testdata/gltf") / folder / file;
-    if (std::filesystem::exists(b)) return b;
-    // maps tree often has players/ but weapons live in the repo testdata
-    if (root.filename() != "gltf") {
-        const auto c = root / ".." / "cyka2pp" / "testdata" / "gltf" / folder / file;
-        if (std::filesystem::exists(c)) return c;
-    }
-    return a;
+    // Valve assets live only under `--maps-dir` (e.g. sibling cs2-maps-tri/), never in this repo.
+    return root / folder / file;
 }
 
 } // namespace

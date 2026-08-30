@@ -14,7 +14,10 @@
 namespace cyka::aim {
 
 /// Skinned third-person player (+ optional worldmodel weapon) for POV dumps.
-/// Assets: `<root>/players/{ct_sas,t_phoenix}.glb`, `<root>/weapons/<slug>.glb`
+/// Assets live under `--maps-dir` only (e.g. sibling `cs2-maps-tri/`):
+///   `<maps_dir>/players/{ct_sas,t_phoenix}.glb`
+///   `<maps_dir>/weapons/<slug>.glb`
+/// Never vendor Valve binaries in this repository.
 ///
 /// Bakes a **local-space** low-poly silhouette (clip/weapon only). World yaw/pos
 /// are applied when raycasting / projecting — so turning does not re-skin.
