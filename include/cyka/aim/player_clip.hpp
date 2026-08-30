@@ -13,8 +13,8 @@ namespace cyka::aim {
 /// (`idle_rifle` / `run_n_rifle` / `idle_crouch_rifle` / `crouch_n_rifle`).
 enum class PlayerClip : std::uint8_t { Idle = 0, Run, Crouch, Crawl };
 
-inline constexpr double kRunSpeedU = 90.0;     // ~walk threshold (u/s)
-inline constexpr double kCrawlSpeedU = 35.0;   // moving while ducked
+inline constexpr double kRunSpeedU = 50.0;     // walk / slow strafe (u/s) — was 90, left sliding as idle
+inline constexpr double kCrawlSpeedU = 25.0;   // moving while ducked
 inline constexpr float kCrouchDuck = 0.55f;    // clearly crouched
 inline constexpr float kCrawlDuck = 0.70f;     // fully ducked + moving
 inline constexpr double kStandViewZ = 64.0;

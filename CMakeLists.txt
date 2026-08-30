@@ -55,6 +55,18 @@ endif()
 
 find_package(Threads REQUIRED)
 
+# meshoptimizer: simplify skinned POV player/weapon meshes (not commonly packaged).
+set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  meshoptimizer
+  GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+  GIT_TAG v0.23
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(meshoptimizer)
+
 set(CYKA_LIB_SOURCES
     src/cli.cpp
     src/analyze.cpp
@@ -135,6 +147,7 @@ target_link_libraries(cyka_core PUBLIC
     Threads::Threads
     ${CYKA_SNAPPY_TARGET}
 )
+target_link_libraries(cyka_core PRIVATE meshoptimizer)
 
 add_executable(cyka2pp src/main.cpp)
 target_link_libraries(cyka2pp PRIVATE cyka_core)

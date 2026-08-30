@@ -270,6 +270,8 @@ struct BodyHit {
     bool ally{false};
     bool alive{true};
     bool shaded{false};
+    bool mesh_hit{false}; // skinned glTF (false = capsule fallback)
+    bool weapon_hit{false};
     Vec3 n{};
 };
 
@@ -283,8 +285,9 @@ bool hit_player(const PovRenderContext& ctx, Vec3 ray_origin, Vec3 ray_dir, doub
         double t_hit = 0;
         Vec3 normal{};
         bool head = false;
+        bool weapon = false;
         if (ctx.players->closest_hit(pose, tick, ctx.tickrate, ray_origin, ray_dir, t_max, t_hit,
-                                     normal, head)) {
+                                     normal, head, weapon)) {
             out.t = t_hit;
             out.shaded = true;
             out.n = normal;
@@ -292,9 +295,13 @@ bool hit_player(const PovRenderContext& ctx, Vec3 ray_origin, Vec3 ray_dir, doub
             out.victim = pose.steam_id == victim_id;
             out.ally = !self_team_letter.empty() && pose.team_letter == self_team_letter;
             out.alive = pose.alive;
+            out.mesh_hit = true;
+            out.weapon_hit = weapon;
             return true;
         }
-        // Missed skinned mesh — fall through to capsules (peek/weapon edge cases).
+        // Prefer an empty pixel over a capsule A-pose when we intended to draw glTF.
+        // Capsules hid missing/offset mesh hits and made victims look unanimated.
+        return false;
     }
     HitboxRayHit hitbox;
     if (!hitbox_ray_hit(ray_origin, ray_dir, t_max, pose, hitbox)) {
@@ -305,6 +312,7 @@ bool hit_player(const PovRenderContext& ctx, Vec3 ray_origin, Vec3 ray_dir, doub
     out.victim = pose.steam_id == victim_id;
     out.ally = !self_team_letter.empty() && pose.team_letter == self_team_letter;
     out.alive = pose.alive;
+    out.mesh_hit = false;
     return true;
 }
 
@@ -555,9 +563,15 @@ struct Pix {
             color_b = 210;
         }
         if (body.victim) {
-            color_r = 255;
-            color_g = 45;
-            color_b = 35;
+            if (body.weapon_hit) {
+                color_r = 255;
+                color_g = 220;
+                color_b = 40; // weapon worldmodel
+            } else {
+                color_r = 255;
+                color_g = 45;
+                color_b = 35;
+            }
             out.victim = true;
         }
         if (body.head) {
@@ -588,8 +602,8 @@ struct Pix {
 }
 
 /// Sample stride from eye→player distance (Source units). Near denser, far coarser.
-[[nodiscard]] int stride_for_dist(const PovRenderContext& ctx, double dist) {
-    const int near_stride = ctx.has_skinned_players() ? 2 : 1;
+[[nodiscard]] int stride_for_dist(const PovRenderContext& /*ctx*/, double dist) {
+    const int near_stride = 1; // denser sampling so thin glTF silhouettes fill
     if (dist < 2200.0) {
         return near_stride;
     }
@@ -604,7 +618,7 @@ struct Pix {
 
 /// Extra screen padding around the hitbox AABB.
 [[nodiscard]] int halo_pad_px(const PovRenderContext& ctx, double dist) {
-    const int scale = ctx.has_skinned_players() ? 2 : 1;
+    const int scale = 1;
     const int min_side = std::min(ctx.width, ctx.height);
     if (dist < 800.0) {
         return std::max(28 / scale, min_side / (5 * scale));
@@ -849,8 +863,9 @@ Result<void> write_ttd_traces(const Match& match, const Samples& samples, const 
            "visibility rays, with a larger soft rim); stride grows with distance; elsewhere a "
            "coarse lattice is upsampled — cheap dumps that still show where the analyzer "
            "actually cast. Kill victim is skinned glTF (CT SAS / T Phoenix) with locomotion clips "
-           "and optional worldmodel weapons on wpnPivot when weapons/*.glb are present; other "
-           "players stay duck-scaled capsules. Grey haze = smoke. Crosshair = view center. Poses "
+           "and optional worldmodel weapons on the animated `wpn` socket when weapons/*.glb are "
+           "present; other players stay duck-scaled capsules. Grey haze = smoke. Crosshair = view "
+           "center. Poses "
            "interpolate across GOTV gaps.</p>\n";
     int nframes = 0;
     double render_s = 0;

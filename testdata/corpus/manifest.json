@@ -1,21 +1,36 @@
 {
-  "notes": "Large .dem files are not git-tracked. Run scripts/fetch_corpus.py. Tests skip missing files. kind uses Valve rankType when known: 7=Wingman, 11=Premier, 12=Competitive.",
+  "notes": "Large .dem files are gitignored. Run scripts/fetch_corpus.py. Tests skip missing files. Prefer Valve CDN demos (https://cdn.hugorustenholz.fr/<match_id>.dem). kind/rankType: 7=Wingman, 11=Premier, 12=Competitive.",
   "demos": [
     {
-      "id": "forfeit-inferno-2-0",
+      "id": "forfeit-surrender-inferno",
       "file": "3839591702666936685.dem",
       "kind": "forfeit",
+      "why": "Only match in the cykaslayer DB whose rounds include endReason=surrender (2-0 Inferno).",
       "map": "de_inferno",
       "scoreA": 2,
       "scoreB": 0,
       "rounds": 2,
+      "expectEndReason": "surrender",
       "urls": ["https://cdn.hugorustenholz.fr/3839591702666936685.dem"]
     },
     {
-      "id": "ranked-nuke-11-13",
+      "id": "short-abandon-mirage",
+      "file": "3816915961118720323.dem",
+      "kind": "forfeit",
+      "why": "Early match end after 3 rounds; cyka2pp reports endReason=surrender (0-3 Mirage). Covers short forfeit path distinct from the Inferno 2-0 demo.",
+      "map": "de_mirage",
+      "scoreA": 0,
+      "scoreB": 3,
+      "rounds": 3,
+      "expectEndReason": "surrender",
+      "urls": ["https://cdn.hugorustenholz.fr/3816915961118720323.dem"]
+    },
+    {
+      "id": "competitive-nuke-11-13",
       "file": "3835689269611987518.dem",
       "kind": "competitive",
       "rankType": 12,
+      "why": "Full Competitive MM on Nuke; golden/aim/TTD/mesh LOS reference demo.",
       "map": "de_nuke",
       "scoreA": 11,
       "scoreB": 13,
@@ -24,29 +39,102 @@
       "urls": ["https://cdn.hugorustenholz.fr/3835689269611987518.dem"]
     },
     {
+      "id": "premier-overtime-dust2",
+      "file": "3824744984272175294.dem",
+      "kind": "premier",
+      "rankType": 11,
+      "why": "Premier (rankType 11) that goes to overtime (14-16, 30 rounds).",
+      "map": "de_dust2",
+      "scoreA": 14,
+      "scoreB": 16,
+      "rounds": 30,
+      "urls": ["https://cdn.hugorustenholz.fr/3824744984272175294.dem"]
+    },
+    {
+      "id": "wingman-inferno",
+      "file": "3839586692587585615.dem",
+      "kind": "wingman",
+      "rankType": 7,
+      "why": "Wingman (rankType 7) with a 4-player roster on Inferno.",
+      "map": "de_inferno",
+      "scoreA": 7,
+      "scoreB": 9,
+      "rounds": 16,
+      "maxPlayers": 5,
+      "urls": ["https://cdn.hugorustenholz.fr/3839586692587585615.dem"]
+    },
+    {
+      "id": "wingman-debris",
+      "file": "3836023995740717247.dem",
+      "kind": "wingman",
+      "rankType": 7,
+      "why": "Wingman on community/workshop map de_debris (non-Active Duty map name).",
+      "map": "de_debris",
+      "scoreA": 9,
+      "scoreB": 7,
+      "rounds": 16,
+      "maxPlayers": 5,
+      "urls": ["https://cdn.hugorustenholz.fr/3836023995740717247.dem"]
+    },
+    {
+      "id": "teamkill-heavy-anubis",
+      "file": "3821766067970113638.dem",
+      "kind": "teamkill",
+      "why": "Many same-team kills in analyzed JSON (friendly fire / TK path).",
+      "map": "de_anubis",
+      "scoreA": 13,
+      "scoreB": 3,
+      "rounds": 16,
+      "minSameTeamKills": 5,
+      "urls": ["https://cdn.hugorustenholz.fr/3821766067970113638.dem"]
+    },
+    {
+      "id": "suicide-roster-inferno",
+      "file": "3827142806531473757.dem",
+      "kind": "suicide",
+      "why": "Multiple self-kills and a tiny roster (3 players) — disconnect/suicide edge case.",
+      "map": "de_inferno",
+      "scoreA": 8,
+      "scoreB": 6,
+      "rounds": 14,
+      "maxPlayers": 5,
+      "minSelfKills": 2,
+      "urls": ["https://cdn.hugorustenholz.fr/3827142806531473757.dem"]
+    },
+    {
+      "id": "world-damage-dust2",
+      "file": "3825296853209972850.dem",
+      "kind": "world_damage",
+      "rankType": 11,
+      "why": "Many kills with empty killerSteamId (bomb/world/fall) in Premier Dust2.",
+      "map": "de_dust2",
+      "scoreA": 4,
+      "scoreB": 13,
+      "rounds": 17,
+      "minEmptyKillerKills": 3,
+      "urls": ["https://cdn.hugorustenholz.fr/3825296853209972850.dem"]
+    },
+    {
+      "id": "hostage-office",
+      "file": "3819662865434935609.dem",
+      "kind": "hostage",
+      "rankType": 12,
+      "why": "cs_office hostage mode + self-kills/knife events for non-defuse map path.",
+      "map": "cs_office",
+      "scoreA": 13,
+      "scoreB": 11,
+      "rounds": 24,
+      "urls": ["https://cdn.hugorustenholz.fr/3819662865434935609.dem"]
+    },
+    {
       "id": "hltv-vitality-spirit-iem-katowice-2025-nuke",
       "file": "vitality-vs-spirit-m2-nuke.dem",
       "kind": "pro",
       "map": "de_nuke",
       "minRounds": 16,
+      "why": "Optional pro GOTV demo (external URL; skipped if missing).",
       "source": "https://www.hltv.org/matches/2378917/vitality-vs-spirit-iem-katowice-2025",
       "urls": ["https://figshare.com/ndownloader/files/52429013"]
-    },
-    {
-      "id": "faceit-room",
-      "file": "1-efdaace4-2fd4-4884-babf-1a5a2c83e344.dem",
-      "kind": "faceit",
-      "source": "https://www.faceit.com/en/cs2/room/1-efdaace4-2fd4-4884-babf-1a5a2c83e344",
-      "minRounds": 8,
-      "urls": ["https://figshare.com/ndownloader/files/52455215"]
-    },
-    {
-      "id": "valve-matchmaking",
-      "file": "match730_003736456444682174484_1173793269_201.dem",
-      "kind": "premier",
-      "source": "https://csstats.gg/match/249286425",
-      "minRounds": 8,
-      "urls": ["https://figshare.com/ndownloader/files/52456259"]
     }
   ]
 }

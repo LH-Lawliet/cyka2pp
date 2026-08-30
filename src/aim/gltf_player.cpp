@@ -2,7 +2,10 @@
 #include "cgltf.h"
 
 #include "cyka/aim/gltf_player.hpp"
+#include "cyka/aim/player_clip.hpp"
 #include "cyka/aim/vision.hpp"
+
+#include <meshoptimizer.h>
 
 #include <algorithm>
 #include <array>
@@ -151,6 +154,8 @@ void apply_anim(const cgltf_animation* anim, float time) {
         const cgltf_animation_channel& ch = anim->channels[ci];
         if (!ch.target_node || !ch.sampler) continue;
         cgltf_node* node = ch.target_node;
+        // Animated channels are TRS; ignore any static bind matrix.
+        node->has_matrix = 0;
         switch (ch.target_path) {
         case cgltf_animation_path_type_translation:
             node->has_translation = 1;
@@ -204,19 +209,42 @@ float anim_dur(const cgltf_animation* anim) {
 bool keep_name(const char* name) {
     if (!name) return true;
     const std::string_view n{name};
+    // Keep thirdperson body + gloves/hands; drop FP arms, kit, HD weapon LOD.
     return n.find("firstperson") == std::string_view::npos &&
            n.find("defusekit") == std::string_view::npos &&
-           n.find("gloves") == std::string_view::npos &&
            n.find("body_hd") == std::string_view::npos;
 }
 
-/// POV silhouette budgets (full agent+weapon exports are 30k+ tris).
-constexpr cgltf_size kMaxBodyTris = 3200;
-constexpr cgltf_size kMaxWeaponTris = 600;
+/// POV silhouettes: emit the full skinned mesh, then [meshoptimizer](https://github.com/zeux/meshoptimizer)
+/// edge-collapse to a coarse watertight LOD (CS2 agents have no lower render LOD to export).
+/// Heavy reduction is fine — TTD only needs a recognizable body/gun blob.
+constexpr cgltf_size kSimplifyBodyTris = 1600;
+constexpr cgltf_size kSimplifyWeaponTris = 280;
+/// Emit budgets before simplify (must fit full TP body+gloves / weapon).
+constexpr cgltf_size kMaxBodyTris = 100000;
+constexpr cgltf_size kMaxArmTris = 100000;
+constexpr cgltf_size kMaxWeaponTris = 50000;
 
 constexpr double kScale = 39.37007874015748;
 
-Vec3 to_src(Vec3 p) { return {p.x * kScale, -p.z * kScale, p.y * kScale}; }
+/// Worldmodel glTFs from S2V are Y-up with barrel along +Z. Idle/run clips aim
+/// the agent `wpn` socket's +X along character forward (+Z glTF / +X Source).
+/// Ry(+90°) maps weapon +Z → socket +X before parenting.
+Mat4 weapon_socket_align() {
+    // Ry(+90°): (x,y,z) → (z, y, −x)
+    Mat4 m = m_id();
+    m[0] = 0.f;
+    m[2] = -1.f;
+    m[8] = 1.f;
+    m[10] = 0.f;
+    return m;
+}
+
+Vec3 to_src(Vec3 p) {
+    // glTF Y-up, character faces +Z → Source Z-up with +X forward (yaw 0).
+    // (x,y,z)_gltf → (z, x, y)_src * inches/meter
+    return {p.z * kScale, p.x * kScale, p.y * kScale};
+}
 
 Vec3 yaw_pos(Vec3 local, Vec3 pos, double yaw_deg) {
     const double y = yaw_deg * kPi / 180.0;
@@ -224,8 +252,65 @@ Vec3 yaw_pos(Vec3 local, Vec3 pos, double yaw_deg) {
     return pos.add(Vec3{c, s, 0}.mul(local.x)).add(Vec3{-s, c, 0}.mul(local.y)).add({0, 0, local.z});
 }
 
+/// Weld a triangle soup and collapse to `target_tris` (or fewer). Keeps a closed shell;
+/// uniform index skipping used to leave holes in POV silhouettes.
+void simplify_tris(std::vector<geom::Triangle>& tris, std::size_t target_tris) {
+    if (tris.size() <= target_tris || tris.empty()) return;
+
+    const std::size_t ntri = tris.size();
+    std::vector<float> positions(ntri * 9);
+    std::vector<unsigned int> indices(ntri * 3);
+    for (std::size_t i = 0; i < ntri; ++i) {
+        const geom::Triangle& t = tris[i];
+        float* p = positions.data() + i * 9;
+        p[0] = float(t.a.x);
+        p[1] = float(t.a.y);
+        p[2] = float(t.a.z);
+        p[3] = float(t.b.x);
+        p[4] = float(t.b.y);
+        p[5] = float(t.b.z);
+        p[6] = float(t.c.x);
+        p[7] = float(t.c.y);
+        p[8] = float(t.c.z);
+        indices[i * 3 + 0] = unsigned(i * 3 + 0);
+        indices[i * 3 + 1] = unsigned(i * 3 + 1);
+        indices[i * 3 + 2] = unsigned(i * 3 + 2);
+    }
+
+    const std::size_t vert_count = ntri * 3;
+    std::vector<unsigned int> remap(vert_count);
+    const std::size_t unique = meshopt_generateVertexRemap(
+        remap.data(), indices.data(), indices.size(), positions.data(), vert_count, sizeof(float) * 3);
+    std::vector<float> unique_pos(unique * 3);
+    std::vector<unsigned int> unique_idx(indices.size());
+    meshopt_remapVertexBuffer(unique_pos.data(), positions.data(), vert_count, sizeof(float) * 3,
+                              remap.data());
+    meshopt_remapIndexBuffer(unique_idx.data(), indices.data(), indices.size(), remap.data());
+
+    const std::size_t target_indices = target_tris * 3;
+    std::vector<unsigned int> lod(unique_idx.size());
+    // Sloppy is intentional: POV only needs a filled silhouette, not animation-safe topology.
+    const std::size_t lod_indices = meshopt_simplifySloppy(
+        lod.data(), unique_idx.data(), unique_idx.size(), unique_pos.data(), unique, sizeof(float) * 3,
+        target_indices, 1.f, nullptr);
+    if (lod_indices < 3) return;
+
+    tris.clear();
+    tris.reserve(lod_indices / 3);
+    for (std::size_t i = 0; i + 2 < lod_indices; i += 3) {
+        const float* a = unique_pos.data() + lod[i] * 3;
+        const float* b = unique_pos.data() + lod[i + 1] * 3;
+        const float* c = unique_pos.data() + lod[i + 2] * 3;
+        geom::Triangle t;
+        t.a = {a[0], a[1], a[2]};
+        t.b = {b[0], b[1], b[2]};
+        t.c = {c[0], c[1], c[2]};
+        tris.push_back(t);
+    }
+}
+
 void emit_node(cgltf_data* data, const cgltf_node* node, const std::vector<Mat4>& world,
-               const Mat4* override_world, std::vector<geom::Triangle>& out) {
+               const Mat4* override_world, cgltf_size tri_budget, std::vector<geom::Triangle>& out) {
     if (!node->mesh || !keep_name(node->mesh->name)) return;
     const cgltf_mesh* mesh = node->mesh;
     const cgltf_skin* skin = override_world ? nullptr : node->skin;
@@ -263,7 +348,7 @@ void emit_node(cgltf_data* data, const cgltf_node* node, const std::vector<Mat4>
     std::sort(prims.begin(), prims.end(),
               [](const PrimInfo& a, const PrimInfo& b) { return a.tris < b.tris; });
 
-    const cgltf_size budget = override_world ? kMaxWeaponTris : kMaxBodyTris;
+    const cgltf_size budget = override_world ? kMaxWeaponTris : tri_budget;
     cgltf_size used = 0;
 
     for (const PrimInfo& info : prims) {
@@ -312,11 +397,8 @@ void emit_node(cgltf_data* data, const cgltf_node* node, const std::vector<Mat4>
             }
             skinned[vi] = to_src(p);
         }
-        // Uniformly subsample oversized prims (weapon legacy meshes are 10k–20k).
         const cgltf_size ntri = prim.indices->count / 3;
-        const cgltf_size remain = budget - used;
-        const cgltf_size step = ntri > remain ? (ntri + remain - 1) / remain : 1;
-        for (cgltf_size ti = 0; ti < ntri && used < budget; ti += step) {
+        for (cgltf_size ti = 0; ti < ntri && used < budget; ++ti) {
             const cgltf_size ii = ti * 3;
             const auto i0 = cgltf_accessor_read_index(prim.indices, ii);
             const auto i1 = cgltf_accessor_read_index(prim.indices, ii + 1);
@@ -332,15 +414,31 @@ void emit_node(cgltf_data* data, const cgltf_node* node, const std::vector<Mat4>
     }
 }
 
-void emit_all(cgltf_data* data, const std::vector<Mat4>& world, const Mat4* override_world,
-              std::vector<geom::Triangle>& out) {
-    for (cgltf_size i = 0; i < data->nodes_count; ++i)
-        emit_node(data, &data->nodes[i], world, override_world, out);
+[[nodiscard]] bool is_arm_mesh(const char* name) noexcept {
+    if (!name) return false;
+    const std::string_view n{name};
+    // SAS/Phoenix put arms+hands on the thirdperson gloves mesh.
+    return n.find("gloves") != std::string_view::npos || n.find("arms") != std::string_view::npos;
+}
+
+void emit_player(cgltf_data* data, const std::vector<Mat4>& world, std::vector<geom::Triangle>& out) {
+    // Arms first — without them the body is an armless torso (looks like A-pose).
+    for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+        const cgltf_node* node = &data->nodes[i];
+        if (!node->mesh || !is_arm_mesh(node->mesh->name)) continue;
+        emit_node(data, node, world, nullptr, kMaxArmTris, out);
+    }
+    for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+        const cgltf_node* node = &data->nodes[i];
+        if (!node->mesh || is_arm_mesh(node->mesh->name)) continue;
+        emit_node(data, node, world, nullptr, kMaxBodyTris, out);
+    }
 }
 
 struct GltfFile {
     cgltf_data* data{nullptr};
-    int wpn_pivot{-1};
+    /// Animated weapon socket (`wpn` preferred; else `wpnPivot`).
+    int wpn_socket{-1};
     ~GltfFile() {
         if (data) cgltf_free(data);
     }
@@ -358,13 +456,16 @@ std::unique_ptr<GltfFile> open_glb(const std::filesystem::path& path) {
     }
     auto f = std::make_unique<GltfFile>();
     f->data = data;
+    int pivot = -1;
+    int wpn = -1;
     for (cgltf_size i = 0; i < data->nodes_count; ++i) {
         const char* n = data->nodes[i].name;
-        if (n && std::strcmp(n, "wpnPivot") == 0) {
-            f->wpn_pivot = int(i);
-            break;
-        }
+        if (!n) continue;
+        if (std::strcmp(n, "wpn") == 0) wpn = int(i);
+        else if (std::strcmp(n, "wpnPivot") == 0) pivot = int(i);
     }
+    // `wpn` is the grip socket animated relative to `wpnPivot` — attach there.
+    f->wpn_socket = wpn >= 0 ? wpn : pivot;
     return f;
 }
 
@@ -517,28 +618,58 @@ const GltfPlayerCache::Baked* GltfPlayerCache::bake(const FramePose& pose, Tick 
     world_mats(data, world);
 
     std::vector<geom::Triangle> tris;
-    tris.reserve(kMaxBodyTris + kMaxWeaponTris + 64);
-    emit_all(data, world, nullptr, tris);
+    tris.reserve(8192);
+    emit_player(data, world, tris);
+    simplify_tris(tris, kSimplifyBodyTris);
 
+    std::vector<geom::Triangle> wpn_tris;
+    wpn_tris.reserve(kSimplifyWeaponTris + 64);
     const std::string slug = weapon_asset_slug(pose.weapon);
-    if (!slug.empty() && player->wpn_pivot >= 0) {
+    if (!slug.empty() && player->wpn_socket >= 0) {
         if (GltfFile* wpn = lib().get(find_asset(root_, "weapons", slug + ".glb")); wpn && wpn->data) {
-            emit_all(wpn->data, world, &world[size_t(player->wpn_pivot)], tris);
+            std::vector<Mat4> wpn_world;
+            world_mats(wpn->data, wpn_world);
+            const Mat4 aligned = m_mul(world[size_t(player->wpn_socket)], weapon_socket_align());
+            for (cgltf_size i = 0; i < wpn->data->nodes_count; ++i) {
+                const Mat4 xform = m_mul(aligned, wpn_world[i]);
+                emit_node(wpn->data, &wpn->data->nodes[i], wpn_world, &xform, kMaxWeaponTris, wpn_tris);
+            }
+            simplify_tris(wpn_tris, kSimplifyWeaponTris);
         }
     }
-    // Leave tris in local space (yaw/pos applied in closest_hit / screen_aabb).
 
     Baked baked;
-    if (!tris.empty()) {
-        Vec3 lo = tris[0].a, hi = tris[0].a;
+    if (!tris.empty() || !wpn_tris.empty()) {
+        bool init = false;
         auto grow = [&](Vec3 p) {
-            lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y); lo.z = std::min(lo.z, p.z);
-            hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y); hi.z = std::max(hi.z, p.z);
+            if (!init) {
+                baked.aabb_min = baked.aabb_max = p;
+                init = true;
+                return;
+            }
+            baked.aabb_min.x = std::min(baked.aabb_min.x, p.x);
+            baked.aabb_min.y = std::min(baked.aabb_min.y, p.y);
+            baked.aabb_min.z = std::min(baked.aabb_min.z, p.z);
+            baked.aabb_max.x = std::max(baked.aabb_max.x, p.x);
+            baked.aabb_max.y = std::max(baked.aabb_max.y, p.y);
+            baked.aabb_max.z = std::max(baked.aabb_max.z, p.z);
         };
-        for (const auto& t : tris) { grow(t.a); grow(t.b); grow(t.c); }
-        baked.aabb_min = lo;
-        baked.aabb_max = hi;
-        baked.mesh = geom::mesh_from_triangles(std::move(tris));
+        for (const auto& t : tris) {
+            grow(t.a);
+            grow(t.b);
+            grow(t.c);
+        }
+        for (const auto& t : wpn_tris) {
+            grow(t.a);
+            grow(t.b);
+            grow(t.c);
+        }
+        if (!tris.empty()) {
+            baked.mesh = geom::mesh_from_triangles(std::move(tris));
+        }
+        if (!wpn_tris.empty()) {
+            baked.weapon = geom::mesh_from_triangles(std::move(wpn_tris));
+        }
     }
     auto [it, _] = cache_.emplace(key, std::move(baked));
     return &it->second;
@@ -565,18 +696,32 @@ const GltfPlayerCache::Baked* GltfPlayerCache::bake(const FramePose& pose, Tick 
 
 bool GltfPlayerCache::closest_hit(const FramePose& pose, Tick tick, double tickrate, Vec3 ro,
                                   Vec3 rd, double tmax, double& t_out, Vec3& n_out,
-                                  bool& head_out) const {
+                                  bool& head_out, bool& weapon_out) const {
     const Baked* b = bake(pose, tick, tickrate);
-    if (!b || !b->mesh) return false;
-    const Vec3 lro = world_to_local(ro, pose.pos, pose.yaw);
-    const Vec3 lrd = dir_to_local(rd, pose.yaw);
+    if (!b || (!b->mesh && !b->weapon)) return false;
+    // Local +X is character forward (glTF +Z → Source +X via to_src); matches eye yaw.
+    const double yaw = pose.yaw;
+    const Vec3 lro = world_to_local(ro, pose.pos, yaw);
+    const Vec3 lrd = dir_to_local(rd, yaw);
     const Vec3 lto = lro.add(lrd.mul(tmax));
-    auto h = b->mesh->closest_hit(lro, lto);
-    if (!h.ok) return false;
-    t_out = h.t * tmax;
-    n_out = normal_to_world(h.n, pose.yaw);
+    geom::Mesh::Hit best{};
+    bool hit_wpn = false;
+    if (b->mesh) {
+        best = b->mesh->closest_hit(lro, lto);
+    }
+    if (b->weapon) {
+        auto wh = b->weapon->closest_hit(lro, lto);
+        if (wh.ok && (!best.ok || wh.t < best.t)) {
+            best = wh;
+            hit_wpn = true;
+        }
+    }
+    if (!best.ok) return false;
+    t_out = best.t * tmax;
+    n_out = normal_to_world(best.n, yaw);
     const double hz = lro.add(lrd.mul(t_out)).z;
-    head_out = hz >= b->aabb_max.z - 0.18 * std::max(1.0, b->aabb_max.z - b->aabb_min.z);
+    head_out = !hit_wpn && hz >= b->aabb_max.z - 0.18 * std::max(1.0, b->aabb_max.z - b->aabb_min.z);
+    weapon_out = hit_wpn;
     return true;
 }
 
@@ -585,7 +730,8 @@ bool GltfPlayerCache::screen_aabb(const FramePose& pose, Tick tick, double tickr
                                   int width, int height, int& min_x, int& max_x, int& min_y,
                                   int& max_y) const {
     const Baked* b = bake(pose, tick, tickrate);
-    if (!b || !b->mesh) return false;
+    if (!b || (!b->mesh && !b->weapon)) return false;
+    const double yaw = pose.yaw;
     min_x = width; max_x = -1; min_y = height; max_y = -1;
     const Vec3 local_corners[8] = {
         {b->aabb_min.x, b->aabb_min.y, b->aabb_min.z}, {b->aabb_max.x, b->aabb_min.y, b->aabb_min.z},
@@ -594,7 +740,7 @@ bool GltfPlayerCache::screen_aabb(const FramePose& pose, Tick tick, double tickr
         {b->aabb_min.x, b->aabb_max.y, b->aabb_max.z}, {b->aabb_max.x, b->aabb_max.y, b->aabb_max.z},
     };
     for (const Vec3& lc : local_corners) {
-        const Vec3 pt = yaw_pos(lc, pose.pos, pose.yaw);
+        const Vec3 pt = yaw_pos(lc, pose.pos, yaw);
         const Vec3 d = pt.sub(eye);
         const double z = d.dot(fwd);
         if (z <= 1e-3) continue;

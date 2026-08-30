@@ -6,6 +6,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_map>
 
 namespace {
 
@@ -63,35 +64,92 @@ void test_corpus() {
         if (!result) {
             continue;
         }
-        const auto& m = *result;
+        const auto& match = *result;
         if (d.contains("map")) {
-            CYKA_CHECK(m.map_name == d["map"].get<std::string>());
+            CYKA_CHECK(match.map_name == d["map"].get<std::string>());
         }
-        if (d.contains("scoreA") && m.team_a) {
-            CYKA_CHECK(m.team_a->score == d["scoreA"].get<int>());
-        }
-        if (d.contains("scoreB") && m.team_b) {
-            CYKA_CHECK(m.team_b->score == d["scoreB"].get<int>());
+        // Team A/B letter can swap vs stored JSON; accept either orientation.
+        if (d.contains("scoreA") && d.contains("scoreB") && match.team_a && match.team_b) {
+            const int want_a = d["scoreA"].get<int>();
+            const int want_b = d["scoreB"].get<int>();
+            const bool ok = (match.team_a->score == want_a && match.team_b->score == want_b) ||
+                            (match.team_a->score == want_b && match.team_b->score == want_a);
+            CYKA_CHECK(ok);
+        } else if (d.contains("scoreA") && match.team_a) {
+            CYKA_CHECK(match.team_a->score == d["scoreA"].get<int>());
+        } else if (d.contains("scoreB") && match.team_b) {
+            CYKA_CHECK(match.team_b->score == d["scoreB"].get<int>());
         }
         if (d.contains("rounds")) {
-            CYKA_CHECK(static_cast<int>(m.rounds.size()) == d["rounds"].get<int>());
+            CYKA_CHECK(static_cast<int>(match.rounds.size()) == d["rounds"].get<int>());
         }
         if (d.contains("minRounds")) {
-            CYKA_CHECK(static_cast<int>(m.rounds.size()) >= d["minRounds"].get<int>());
+            CYKA_CHECK(static_cast<int>(match.rounds.size()) >= d["minRounds"].get<int>());
         }
         if (d.contains("minKills")) {
-            CYKA_CHECK(static_cast<int>(m.kills.size()) >= d["minKills"].get<int>());
+            CYKA_CHECK(static_cast<int>(match.kills.size()) >= d["minKills"].get<int>());
+        }
+        if (d.contains("maxPlayers")) {
+            CYKA_CHECK(static_cast<int>(match.players.size()) <= d["maxPlayers"].get<int>());
         }
         if (d.contains("rankType")) {
             const int want = d["rankType"].get<int>();
             bool ok = false;
-            for (const auto& [_, p] : m.players) {
-                if (p.rank_type == want) {
+            for (const auto& [_, player] : match.players) {
+                if (player.rank_type == want) {
                     ok = true;
                     break;
                 }
             }
             CYKA_CHECK(ok);
+        }
+        if (d.contains("expectEndReason")) {
+            const std::string want = d["expectEndReason"].get<std::string>();
+            bool ok = false;
+            for (const auto& round : match.rounds) {
+                if (!round) {
+                    continue;
+                }
+                if (round->end_reason.find(want) != std::string::npos) {
+                    ok = true;
+                    break;
+                }
+            }
+            CYKA_CHECK(ok);
+        }
+
+        std::unordered_map<cyka::SteamId, std::string> team_of;
+        for (const auto& [steam_id, player] : match.players) {
+            team_of[steam_id] = player.team;
+        }
+        int same_team_kills = 0;
+        int self_kills = 0;
+        int empty_killer = 0;
+        for (const auto& kill : match.kills) {
+            if (!kill) {
+                continue;
+            }
+            if (kill->killer_steam_id.empty()) {
+                ++empty_killer;
+            } else if (kill->killer_steam_id == kill->victim_steam_id) {
+                ++self_kills;
+            } else {
+                const auto kt = team_of.find(kill->killer_steam_id);
+                const auto vt = team_of.find(kill->victim_steam_id);
+                if (kt != team_of.end() && vt != team_of.end() && !kt->second.empty() &&
+                    kt->second == vt->second) {
+                    ++same_team_kills;
+                }
+            }
+        }
+        if (d.contains("minSameTeamKills")) {
+            CYKA_CHECK(same_team_kills >= d["minSameTeamKills"].get<int>());
+        }
+        if (d.contains("minSelfKills")) {
+            CYKA_CHECK(self_kills >= d["minSelfKills"].get<int>());
+        }
+        if (d.contains("minEmptyKillerKills")) {
+            CYKA_CHECK(empty_killer >= d["minEmptyKillerKills"].get<int>());
         }
     }
     if (ran == 0) {

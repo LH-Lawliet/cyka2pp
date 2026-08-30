@@ -30,152 +30,34 @@ Mesh LOS uses DLT1 `.tri` maps + BVH raycasts (batched / multi-threaded).
 Player duck amount from the demo scales hitboxes / eye height and selects
 locomotion clips (`idle` / `run` / `crouch` / `crawl`) for POV dumps when
 player glTFs are present under `--maps-dir`. Default TTD/POV grid is **640×360**.
+CS2 agents have **no lower render LOD** to export; POV bakes the full third-person
+mesh then collapses it with [meshoptimizer](https://github.com/zeux/meshoptimizer)
+(`simplifySloppy`, ~1.6k body / ~280 weapon tris) so silhouettes stay filled
+without the swiss-cheese look of skipping every Nth triangle.
 
 ## Local CS2 asset folder (`--maps-dir`)
 
-cyka2pp **never** ships Valve game files. You build a private asset directory
-on your machine (any path; a common name is `cs2-maps-tri` next to this repo)
-and pass it with `--maps-dir` / `CYKA2PP_MAPS_DIR`. Keep that folder out of git.
+cyka2pp **never** ships Valve game files. You keep a private asset directory
+(maps `.tri`, optional `players/*.glb` + `weapons/*.glb`) and pass it with
+`--maps-dir` / `CYKA2PP_MAPS_DIR`. Keep that folder out of git.
 
-### Layout
-
-```
-<maps-dir>/
-  de_nuke.tri                 # required for mesh LOS / TTD on that map
-  de_mirage.tri               # …one DLT1 .tri per map you analyze
-  …
-  players/
-    ct_sas.glb                # optional — POV victim mesh (CT)
-    t_phoenix.glb             # optional — POV victim mesh (T)
-  weapons/
-    ak47.glb                  # optional — worldmodels on wpnPivot
-    awp.glb
-    …                         # see scripts/export_cs2_assets.sh for the full set
-```
-
-Exports are **geometry only** (no materials/textures). cyka2pp raycasts meshes; it
-never samples PNGs.
-- **Without** `.tri` files: parse/scoreboard/highlights still work; aim metrics
-  that need walls (TTD, spotted, …) degrade or skip mesh occlusion.
-- **Without** `players/*.glb`: POV dumps use duck-scaled capsules only.
-- **Without** `weapons/*.glb`: skinned victims render without a held gun.
-
-### 1. Install Source 2 Viewer CLI
-
-Download `cli-linux-x64.zip` (or your OS) from
-[ValveResourceFormat releases](https://github.com/ValveResourceFormat/ValveResourceFormat/releases)
-and put `Source2Viewer-CLI` on your `PATH`. Docs: [s2v.app](https://s2v.app).
-
-Point `CS2_ROOT` at your CS2 install if it is not the Steam default:
+Build / refresh assets with the exporter in the sibling **cs2-maps-tri** tree
+([Source 2 Viewer](https://s2v.app) / ValveResourceFormat required on `PATH`):
 
 ```bash
-export CS2_ROOT="$HOME/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive"
-export CSGO="$CS2_ROOT/game/csgo"
+# from the cs2-maps-tri checkout (writes geometry-only glTF + optional .tri)
+./scripts/export_cs2_assets.sh              # players + weapons + maps
+./scripts/export_cs2_assets.sh weapons      # weapons only
 ```
 
-### 2. One-shot export (recommended)
-
-From this repo (writes **outside** cyka2pp by default):
+Then:
 
 ```bash
-chmod +x scripts/export_cs2_assets.sh
-# argument = asset root (create it anywhere you like; do not put it inside cyka2pp)
-./scripts/export_cs2_assets.sh "$HOME/cs2-maps-tri"
+./build/cyka2pp analyze path/to/match.dem --maps-dir /path/to/cs2-maps-tri …
 ```
 
-That script exports:
-
-| Piece | Source | Output |
-| ----- | ------ | ------ |
-| Players + 4 locomotion clips | `pak01_dir.vpk` agents | `players/{ct_sas,t_phoenix}.glb` |
-| Weapon worldmodels | `pak01_dir.vpk` weapon models | `weapons/{ak47,awp,…}.glb` |
-| Map collision `.tri` | via [demolens](https://github.com/f-gillmann/demolens) `extract-map` if installed | `<map>.tri` (+ `maps/` copies) |
-
-If demolens is missing, players/weapons still export; add map `.tri` files
-yourself (next section).
-
-### 3. Maps → DLT1 `.tri` (LOS / TTD)
-
-cyka2pp loads **DLT1** triangle soups (`"DLT1"` magic + `uint32` count +
-`float32` xyz×3 per triangle). File name must match the demo map
-(`de_nuke.tri` for `de_nuke`).
-
-With demolens:
-
-```bash
-demolens extract-map \
-  --cs2 "$CS2_ROOT" \
-  --map de_nuke \
-  --out-dir "$HOME/cs2-maps-tri/maps" \
-  --vrf Source2Viewer-CLI
-# cyka2pp expects the .tri at the maps-dir root:
-ln -sfn maps/de_nuke.tri "$HOME/cs2-maps-tri/de_nuke.tri"
-```
-
-Manual path: export `maps/<map>/world_physics.vmdl_c` from `maps/<map>.vpk`
-with Source2Viewer-CLI, then convert to DLT1 (demolens `extract-map` is the
-usual converter).
-
-### 4. Players / weapons by hand (optional)
-
-Same files the script writes — useful if you only need one agent or gun:
-
-```bash
-ANIMS='animation/anims/world/rifle/_default_rifle/idle_rifle,animation/anims/world/rifle/_default_rifle/run_n_rifle,animation/anims/world/rifle/_default_rifle/idle_crouch_rifle,animation/anims/world/rifle/_default_rifle/crouch_n_rifle'
-MAPS="$HOME/cs2-maps-tri"
-mkdir -p "$MAPS/players" "$MAPS/weapons"
-
-Source2Viewer-CLI -i "$CSGO/pak01_dir.vpk" \
-  -f "agents/models/ctm_sas/ctm_sas.vmdl_c" \
-  -o "$MAPS/players/ct_sas.glb" -d \
-  --gltf_export_format glb --gltf_export_animations \
-  --gltf_animation_list "$ANIMS" --gltf_export_materials
-
-Source2Viewer-CLI -i "$CSGO/pak01_dir.vpk" \
-  -f "agents/models/tm_phoenix/tm_phoenix.vmdl_c" \
-  -o "$MAPS/players/t_phoenix.glb" -d \
-  --gltf_export_format glb --gltf_export_animations \
-  --gltf_animation_list "$ANIMS" --gltf_export_materials
-
-# worldmodels (examples)
-Source2Viewer-CLI -i "$CSGO/pak01_dir.vpk" \
-  -f "weapons/models/ak47/weapon_rif_ak47.vmdl_c" \
-  -o "$MAPS/weapons/ak47.glb" -d --gltf_export_format glb --gltf_export_materials
-```
-
-Weapon slugs cyka2pp looks for (export script writes these): rifles (`ak47`,
-`m4a4`, `m4a1`, `famas`, `galilar`, `aug`, `sg556`), snipers (`awp`, `ssg08`,
-`scar20`, `g3sg1`), pistols (`deagle`, `glock`, `usp`, `hkp2000`, `p250`,
-`fiveseven`, `tec9`, `cz75a`, `elite`, `revolver`), SMGs / shotguns / heavy
-(`mp9`, `mac10`, `mp7`, `ump45`, `p90`, `bizon`, `mp5sd`, `nova`, `xm1014`,
-`mag7`, `sawedoff`, `m249`, `negev`).
-
-### 5. Clip ↔ demo (POV)
-
-| Clip   | Animation basename   | Demo rule |
-| ------ | -------------------- | --------- |
-| idle   | `idle_rifle`         | duck &lt; 0.55 and speed &lt; ~90 u/s |
-| run    | `run_n_rifle`        | standing and speed ≥ ~90 u/s |
-| crouch | `idle_crouch_rifle`  | duck ≥ 0.55 |
-| crawl  | `crouch_n_rifle`     | duck ≥ 0.70 and speed ≥ ~35 u/s |
-
-Duck is pawn `m_flDuckAmount`; speed is horizontal u/s between pose samples.
-Analyzer LOS still uses duck-scaled capsules; skinned mesh is POV-only (kill
-victim), with optional gun on `wpnPivot`.
-
-### 6. Run analyze with your folder
-
-```bash
-./build/cyka2pp analyze path/to/match.dem \
-  --maps-dir "$HOME/cs2-maps-tri" \
-  --ttd-trace-dir /tmp/ttd-traces \
-  --format json --out /tmp/m.json
-```
-
-Do **not** commit or publish `.tri` / `.glb` / VPK extracts. They are derived
-from your CS2 install for local analysis only. Always credit
-[Source 2 Viewer](https://s2v.app) / ValveResourceFormat when you document the
-pipeline.
+Without `.tri` files, parse/scoreboard still work but mesh LOS / TTD degrade.
+Without player/weapon glTFs, POV dumps use capsules (no skinned victim/gun).
 
 ## Install (production / container)
 
@@ -388,8 +270,9 @@ Open the full strip gallery: `testdata/ttd-traces/index.html` (captions show `id
 
 In the viewer: **cyan** = first victim pixel on screen, **green** = TTD clock
 running, **orange** = kill/shot tick, **red** = not counting. The kill victim is
-a skinned glTF player (optional worldmodel on `wpnPivot`); other enemies stay
-duck-scaled capsules. Grey haze is smoke; white cross is view center.
+a meshoptimizer-simplified skinned glTF player (optional worldmodel on the animated
+`wpn` socket); other enemies stay duck-scaled capsules. Grey haze is smoke; white
+cross is view center.
 
 ```bash
 # Regenerate the local gallery (BMPs are gitignored; PNGs above are committed)
@@ -404,21 +287,23 @@ duck-scaled capsules. Grey haze is smoke; white cross is view center.
 
 ### Perf notes
 
-Measured on an **AMD Ryzen 7 5800X** (8C/16T), Release build, mid Nuke demo
-(`testdata/demos/3835689269611987518.dem`, `--maps-dir` meshes loaded):
+Measured on this machine (Release build), mid Nuke demo
+(`testdata/demos/3835689269611987518.dem`, `--maps-dir` meshes loaded), after
+meshoptimizer POV silhouettes:
 
 
 | Mode                                                    | Wall       |
 | ------------------------------------------------------- | ---------- |
-| `analyze` (default 640×360), no traces                  | **~5.2s**  |
-| same + `--ttd-trace-dir` @ 320×180 (~425 frames)        | **~7.8s**  |
-| same + `--ttd-trace-dir` @ 640×360 (~430 frames)        | **~10.5s** |
+| `analyze` (default 640×360 TTD grid), no traces         | **~5.1s**  |
+| same + `--ttd-trace-dir` @ 640×360 (~430 frames)        | **~27s**   |
+| same + `--ttd-trace-dir` @ 1280×720                     | **~80s**   |
 
 
-Analyze time is after the visibility opts (hitbox-before-mesh, pose reuse,
-memoized lazy batch, parallel lookbacks). Rays stay AABB-scoped, so the default
-grid size barely moves analyze wall; POV dumps shade adaptive images (victim
-skinned mesh, others capsules, frames parallelized).
+The **~10s goal** is for production `analyze` (JSON/table) — that path still
+lands around **5s**. POV dumps are optional debug; each frame shades an adaptive
+image with a skinned victim (~1.6k tris) so dump wall scales with resolution
+(~46 ms/frame @640, ~150 ms/frame @720). Analyze TTD itself stays AABB-scoped
+hitbox/map rays and barely moves with `--ttd-size`.
 
 ## Demo corpus and cross-parser checks
 
@@ -433,15 +318,20 @@ python3 scripts/compare_analyzers.py --bin ./build/cyka2pp --maps-dir "$HOME/cs2
 ```
 
 
-| kind                      | what                                                            |
-| ------------------------- | --------------------------------------------------------------- |
-| `pro`                     | HLTV (Awpy fixture: Vitality vs Spirit, IEM Katowice 2025 Nuke) |
-| `competitive` / `premier` | Valve GOTV (`match730_…` MM + ranked 11–13 Nuke)                |
-| `faceit`                  | FACEIT room demo from Awpy                                      |
-| `forfeit`                 | early surrender 2–0                                             |
+| kind / id                    | what                                                                 |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `forfeit` (×2)               | `endReason=surrender` — Inferno 2–0 + Mirage 0–3                     |
+| `competitive`                | full MM Nuke 11–13 (aim/TTD golden)                                  |
+| `premier`                    | Premier OT Dust2 14–16 (`rankType` 11)                               |
+| `wingman`                    | 4-player Inferno + workshop `de_debris` (`rankType` 7)               |
+| `teamkill`                   | Anubis with many same-team kills                                     |
+| `suicide`                    | tiny roster + self-kills (quit/disconnect edge)                      |
+| `world_damage`               | many kills with empty `killerSteamId` (bomb/world)                   |
+| `hostage`                    | `cs_office` non-defuse map                                           |
+| `pro` (optional)             | HLTV Vitality vs Spirit Nuke — skipped if the external URL is down   |
 
-
-Official **Wingman** GOTV files are not redistributed publicly (Steam GCPD only). Drop a `*.dem` into `testdata/demos/` and add a `manifest.json` entry (`rankType` 7). Premier is `rankType` 11, competitive 12.
+Valve CDN: `https://cdn.hugorustenholz.fr/<match_id>.dem`. Prem=11, Comp=12, Wingman=7.
+DB text search found no explicit kick/abandon strings; short forfeit + under-roster demos cover leave/disconnect.
 
 ## Kill tag system
 
