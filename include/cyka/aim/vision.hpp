@@ -5,25 +5,54 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace cyka::aim {
 
-inline constexpr double kPi = 3.14159265358979323846;
+inline constexpr double MATH_PI = std::numbers::pi;
 
 /// CS2 world FOV is Hor+: vertical is locked, horizontal grows with aspect.
-inline constexpr double kCs2VertFovDeg = 73.74;
-inline constexpr double kCs2HorzFov4x3Deg = 90.0;
-inline constexpr double kCs2HorzFov16x10Deg = 100.0;
-inline constexpr double kCs2HorzFov16x9Deg = 106.26;
+inline constexpr double CS2_VERT_FOV_DEG = 73.74;
+inline constexpr double CS2_HORZ_FOV4X3_DEG = 90.0;
+inline constexpr double CS2_HORZ_FOV16X10_DEG = 100.0;
+inline constexpr double CS2_HORZ_FOV16X9_DEG = 106.26;
 
 /// TTD / POV traces use 16:9 (GOTV and default video).
-inline constexpr double kTtdHorzFovDeg = kCs2HorzFov16x9Deg;
-inline constexpr double kTtdVertFovDeg = kCs2VertFovDeg;
+inline constexpr double TTD_HORZ_FOV_DEG = CS2_HORZ_FOV16X9_DEG;
+inline constexpr double TTD_VERT_FOV_DEG = CS2_VERT_FOV_DEG;
 
-[[nodiscard]] inline Vec3 view_forward(double pitch, double yaw) {
-    const double p = pitch * kPi / 180.0;
-    const double y = yaw * kPi / 180.0;
-    return Vec3{std::cos(p) * std::cos(y), std::cos(p) * std::sin(y), -std::sin(p)}.normalize();
+inline constexpr double EPS_DIR = 1e-6;
+inline constexpr double EPS_FRUSTUM = 1e-9;
+
+inline constexpr double DEG_PER_RAD = 180.0;
+
+struct ViewAngles {
+    double pitch{0};
+    double yaw{0};
+};
+
+struct FrustumQuery {
+    ViewAngles angles;
+    Vec3 eye;
+    Vec3 target;
+    double horz_deg{0};
+    double vert_deg{0};
+};
+
+struct HalfFovQuery {
+    ViewAngles angles;
+    Vec3 from;
+    Vec3 to;
+    double half_deg{0};
+};
+
+[[nodiscard]] inline Vec3 viewForward(ViewAngles angles) {
+    const double PITCH = angles.pitch * MATH_PI / 180.0;
+    const double YAW = angles.yaw * MATH_PI / 180.0;
+    return Vec3{.pos_x = std::cos(PITCH) * std::cos(YAW),
+                .pos_y = std::cos(PITCH) * std::sin(YAW),
+                .pos_z = -std::sin(PITCH)}
+        .normalize();
 }
 
 struct ViewAxes {
@@ -32,71 +61,75 @@ struct ViewAxes {
     Vec3 up{};
 };
 
-[[nodiscard]] inline ViewAxes view_axes(double pitch, double yaw) {
-    ViewAxes a;
-    a.fwd = view_forward(pitch, yaw);
+[[nodiscard]] inline ViewAxes viewAxes(ViewAngles angles) {
+    ViewAxes axes;
+    axes.fwd = viewForward(angles);
     // Source/CS2 AngleVectors (roll=0): right = (sin(yaw), -cos(yaw), 0) at pitch 0
     // = forward × world_up. Using world_up × forward flips left/right in POV dumps.
-    const Vec3 world_up{0, 0, 1};
-    a.right = a.fwd.cross(world_up);
-    if (a.right.length() < 1e-6) {
-        a.right = {0, -1, 0};
+    const Vec3 WORLD_UP{.pos_x = 0, .pos_y = 0, .pos_z = 1};
+    axes.right = axes.fwd.cross(WORLD_UP);
+    if (axes.right.length() < EPS_DIR) {
+        axes.right = {.pos_x = 0, .pos_y = -1, .pos_z = 0};
     } else {
-        a.right = a.right.normalize();
+        axes.right = axes.right.normalize();
     }
-    a.up = a.right.cross(a.fwd).normalize();
-    return a;
+    axes.up = axes.right.cross(axes.fwd).normalize();
+    return axes;
 }
 
-[[nodiscard]] inline double angle_deg(Vec3 a, Vec3 b) {
-    double cosang = a.normalize().dot(b.normalize());
+struct AngleQuery {
+    Vec3 lhs;
+    Vec3 rhs;
+};
+
+[[nodiscard]] inline double angleDeg(const AngleQuery& query) {
+    double cosang = query.lhs.normalize().dot(query.rhs.normalize());
     cosang = std::clamp(cosang, -1.0, 1.0);
-    return std::acos(cosang) * 180.0 / kPi;
+    return std::acos(cosang) * DEG_PER_RAD / MATH_PI;
 }
 
 /// Rectangular CS2 view frustum (not a circular cone).
-[[nodiscard]] inline bool in_view_frustum(double pitch, double yaw, Vec3 from, Vec3 to,
-                                          double horz_deg, double vert_deg) {
-    const Vec3 delta = to.sub(from);
-    if (delta.length() < 1e-6) {
+[[nodiscard]] inline bool inViewFrustum(const FrustumQuery& query) {
+    const Vec3 DELTA = query.target.sub(query.eye);
+    if (DELTA.length() < EPS_DIR) {
         return false;
     }
-    const ViewAxes ax = view_axes(pitch, yaw);
-    const double z = delta.dot(ax.fwd);
-    if (z <= 1e-6) {
+    const ViewAxes AXES = viewAxes(query.angles);
+    const double DEPTH = DELTA.dot(AXES.fwd);
+    if (DEPTH <= EPS_DIR) {
         return false;
     }
-    const double x = delta.dot(ax.right);
-    const double y = delta.dot(ax.up);
-    const double tan_h = std::tan(horz_deg * 0.5 * kPi / 180.0);
-    const double tan_v = std::tan(vert_deg * 0.5 * kPi / 180.0);
-    return std::abs(x) <= z * tan_h + 1e-9 && std::abs(y) <= z * tan_v + 1e-9;
+    const double RIGHT = DELTA.dot(AXES.right);
+    const double UP_VEC = DELTA.dot(AXES.up);
+    const double TAN_H = std::tan(query.horz_deg * 0.5 * MATH_PI / 180.0);
+    const double TAN_V = std::tan(query.vert_deg * 0.5 * MATH_PI / 180.0);
+    return std::abs(RIGHT) <= ((DEPTH * TAN_H) + EPS_FRUSTUM) &&
+           std::abs(UP_VEC) <= ((DEPTH * TAN_V) + EPS_FRUSTUM);
 }
 
-[[nodiscard]] inline bool in_half_fov(double pitch, double yaw, Vec3 from, Vec3 to,
-                                      double half_deg) {
-    const Vec3 dir = to.sub(from);
-    if (dir.length() < 1e-6) {
+[[nodiscard]] inline bool inHalfFov(const HalfFovQuery& query) {
+    const Vec3 DIR = query.to.sub(query.from);
+    if (DIR.length() < EPS_DIR) {
         return false;
     }
-    return angle_deg(view_forward(pitch, yaw), dir) <= half_deg;
+    return angleDeg({.lhs = viewForward(query.angles), .rhs = DIR}) <= query.half_deg;
 }
 
-[[nodiscard]] inline const Frame* frame_at_or_before(const Samples& samples, Tick tick) {
-    const Frame* best = nullptr;
-    for (const auto& fr : samples.frames) {
-        if (fr.tick > tick) {
+[[nodiscard]] inline const Frame* frameAtOrBefore(const Samples& samples, Tick tick) {
+    const Frame* best_frame = nullptr;
+    for (const auto& frame : samples.frames) {
+        if (frame.tick > tick) {
             break;
         }
-        best = &fr;
+        best_frame = &frame;
     }
-    return best;
+    return best_frame;
 }
 
-[[nodiscard]] inline const FramePose* find_pose(const Frame& fr, const SteamId& sid) {
-    for (const auto& p : fr.poses) {
-        if (p.steam_id == sid) {
-            return &p;
+[[nodiscard]] inline const FramePose* findPose(const Frame& frame, const SteamId& steam) {
+    for (const auto& pose : frame.poses) {
+        if (pose.steam_id == steam) {
+            return &pose;
         }
     }
     return nullptr;

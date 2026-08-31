@@ -14,41 +14,40 @@
 namespace cyka::aim {
 namespace {
 
-constexpr double kWinsorPct = 30.0;
+constexpr double WINSOR_PCT = 30.0;
+constexpr int TICK_FLOOR_DIV = 4;
 
 using Pair = LosBatch::Pair;
 
-[[nodiscard]] double winsor_mean(std::vector<double> xs) {
-    if (xs.empty()) {
+[[nodiscard]] double winsorMean(std::vector<double> values) {
+    if (values.empty()) {
         return 0;
     }
-    std::sort(xs.begin(), xs.end());
-    const auto idx =
-        static_cast<std::size_t>(std::floor((kWinsorPct / 100.0) * static_cast<double>(xs.size())));
-    const double floor_v = xs[std::min(idx, xs.size() - 1)];
+    std::ranges::sort(values);
+    const auto WINSOR_IDX = static_cast<std::size_t>(
+        std::floor((WINSOR_PCT / 100.0) * static_cast<double>(values.size())));
+    const double FLOOR_V = values[std::min(WINSOR_IDX, values.size() - 1)];
     double sum = 0;
-    for (double& v : xs) {
-        if (v < floor_v) {
-            v = floor_v;
-        }
-        sum += v;
+    for (double& val : values) {
+        val = std::max(val, FLOOR_V);
+        sum += val;
     }
-    return sum / static_cast<double>(xs.size());
+    return sum / static_cast<double>(values.size());
 }
 
 /// Sight window ending at `last`, not extending through a prior damage at `floor_tick`
 /// (open was cleared on that damage; new sight can start at floor_tick+1).
-[[nodiscard]] std::optional<Tick> sight_start_after(const VisibilityBatch& vis, Tick last,
-                                                    const Pair& key, Tick floor_tick) {
+[[nodiscard]] std::optional<Tick> sightStartAfter(
+    const VisibilityBatch& vis, Tick last, const Pair& key, Tick floor_tick) {
     if (!vis.visible(last, key.first, key.second)) {
         return std::nullopt;
     }
-    const Tick lo = floor_tick < vis.tick_begin ? vis.tick_begin : floor_tick + 1;
-    if (last < lo) {
+    const Tick FLOOR_LO = floor_tick < vis.tickBegin() ? vis.tickBegin() : floor_tick + 1;
+    if (last < FLOOR_LO) {
         return std::nullopt;
     }
     Tick start = last;
-    while (start > lo && vis.visible(start - 1, key.first, key.second)) {
+    while (start > FLOOR_LO && vis.visible(start - 1, key.first, key.second)) {
         --start;
     }
     return start;
@@ -56,7 +55,7 @@ using Pair = LosBatch::Pair;
 
 } // namespace
 
-void crosshair_enrich(const VisibilityBatch& vis, Match& match, const Samples& samples) {
+void crosshairEnrich(const VisibilityBatch& vis, Match& match, const Samples& samples) {
     if (!vis.ready()) {
         return;
     }
@@ -64,76 +63,80 @@ void crosshair_enrich(const VisibilityBatch& vis, Match& match, const Samples& s
     std::unordered_map<Pair, Tick, PairHash> last_dmg_tick;
 
     std::vector<std::size_t> order(samples.damages.size());
-    for (std::size_t i = 0; i < order.size(); ++i) {
-        order[i] = i;
+    for (std::size_t idx = 0; idx < order.size(); ++idx) {
+        order[idx] = idx;
     }
-    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
-        return samples.damages[a].time_s < samples.damages[b].time_s;
+    std::ranges::sort(order, [&](std::size_t left, std::size_t right) {
+        return samples.damages[left].time_s < samples.damages[right].time_s;
     });
 
-    for (std::size_t di : order) {
-        const DamageSample& d = samples.damages[di];
-        const Pair key{d.attacker_id, d.victim_id};
-        const Tick last = d.tick;
-        if (last < vis.tick_begin || last > vis.tick_end) {
-            last_dmg_tick[key] = last;
+    for (const std::size_t DMG_IDX : order) {
+        const DamageSample& damage = samples.damages[DMG_IDX];
+        const Pair KEY{damage.attacker_id, damage.victim_id};
+        const Tick LAST = damage.tick;
+        if (LAST < vis.tickBegin() || LAST > vis.tickEnd()) {
+            last_dmg_tick[KEY] = LAST;
             continue;
         }
-        Tick floor = std::numeric_limits<Tick>::min() / 4;
-        if (auto it = last_dmg_tick.find(key); it != last_dmg_tick.end()) {
-            floor = it->second;
+        Tick floor_tick = std::numeric_limits<Tick>::min() / TICK_FLOOR_DIV;
+        if (auto iter = last_dmg_tick.find(KEY); iter != last_dmg_tick.end()) {
+            floor_tick = iter->second;
         }
-        const auto start = sight_start_after(vis, last, key, floor);
-        last_dmg_tick[key] = last;
-        if (!start) {
+        const auto START = sightStartAfter(vis, LAST, KEY, floor_tick);
+        last_dmg_tick[KEY] = LAST;
+        if (!START) {
             continue;
         }
-        const auto& start_poses = vis.poses(*start);
-        const FramePose* sh0 = nullptr;
-        for (const auto& p : start_poses) {
-            if (p.steam_id == d.attacker_id) {
-                sh0 = &p;
+        const auto& start_poses = vis.poses(*START);
+        const FramePose* shooter_start = nullptr;
+        for (const auto& pose : start_poses) {
+            if (pose.steam_id == damage.attacker_id) {
+                shooter_start = &pose;
                 break;
             }
         }
-        if (sh0 == nullptr) {
+        if (shooter_start == nullptr) {
             continue;
         }
-        const double pitch0 = sh0->pitch;
-        const double yaw0 = sh0->yaw;
+        const double PITCH0 = shooter_start->pitch;
+        const double YAW0 = shooter_start->yaw;
 
-        const auto& dmg_poses = vis.poses(d.tick);
-        const FramePose* sh = nullptr;
-        const FramePose* en = nullptr;
-        for (const auto& p : dmg_poses) {
-            if (p.steam_id == d.attacker_id) {
-                sh = &p;
+        const auto& dmg_poses = vis.poses(damage.tick);
+        const FramePose* shooter_at_dmg = nullptr;
+        const FramePose* enemy_at_dmg = nullptr;
+        for (const auto& pose : dmg_poses) {
+            if (pose.steam_id == damage.attacker_id) {
+                shooter_at_dmg = &pose;
             }
-            if (p.steam_id == d.victim_id) {
-                en = &p;
+            if (pose.steam_id == damage.victim_id) {
+                enemy_at_dmg = &pose;
             }
         }
-        if (en == nullptr) {
+        if (enemy_at_dmg == nullptr) {
             continue;
         }
-        const Vec3 eye = sh != nullptr ? player_eye(*sh) : en->pos;
-        const Vec3 tgt = nearest_hitbox_point(eye, view_forward(pitch0, yaw0), *en);
-        const double deg = angle_deg(view_forward(pitch0, yaw0), tgt.sub(eye));
-        by_shooter[d.attacker_id].push_back(deg);
+        const Vec3 EYE = shooter_at_dmg != nullptr ? playerEye(*shooter_at_dmg) : enemy_at_dmg->pos;
+        const Vec3 TGT = nearestHitboxPoint(
+            {.eye = EYE,
+             .forward = viewForward({.pitch = PITCH0, .yaw = YAW0}),
+             .enemy = enemy_at_dmg});
+        const double DEG =
+            angleDeg({.lhs = viewForward({.pitch = PITCH0, .yaw = YAW0}), .rhs = TGT.sub(EYE)});
+        by_shooter[damage.attacker_id].push_back(DEG);
     }
 
-    for (auto& [sid, xs] : by_shooter) {
-        if (xs.empty()) {
+    for (auto& [sid, degrees] : by_shooter) {
+        if (degrees.empty()) {
             continue;
         }
-        auto pit = match.players.find(sid);
-        if (pit == match.players.end()) {
+        auto piter = match.players.find(sid);
+        if (piter == match.players.end()) {
             continue;
         }
-        if (!pit->second.aim) {
-            pit->second.aim = PlayerAim{};
+        if (!piter->second.aim) {
+            piter->second.aim = PlayerAim{};
         }
-        pit->second.aim->crosshair_placement = winsor_mean(std::move(xs));
+        piter->second.aim->crosshair_placement = winsorMean(std::move(degrees));
     }
 }
 

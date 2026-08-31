@@ -28,7 +28,6 @@ struct FramePose {
     std::string weapon;
 };
 
-
 struct Frame {
     Tick tick{0};
     double time_s{0};

@@ -6,6 +6,6 @@
 
 namespace cyka::aim {
 
-void spotted_enrich(const VisibilityBatch& vis, Match& match, const Samples& samples);
+void spottedEnrich(const VisibilityBatch& vis, Match& match, const Samples& samples);
 
 } // namespace cyka::aim

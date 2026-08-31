@@ -1,34 +1,238 @@
-# Strict static analysis for cyka-analyzer. Warnings are treated as errors
-# when invoked via the cyka_tidy CMake target.
+# Intentionally harsh: C++26, Core Guidelines, CERT, HICPP, analyzer opt-in,
+# taint, and naming. Warnings are errors via the cyka_tidy CMake target.
+#
+# There is no cppcoreguidelines-avoid-raw-pointers check. Ownership / raw
+# pointer pressure comes from owning-memory, no-malloc, bounds, and
+# pro-type-*-cast instead.
 Checks: >
   bugprone-*,
   clang-analyzer-*,
+  clang-analyzer-security-*,
+  clang-analyzer-optin.core.*,
+  clang-analyzer-optin.cplusplus.UninitializedObject,
+  clang-analyzer-optin.cplusplus.VirtualCall,
+  clang-analyzer-optin.performance.Padding,
+  clang-analyzer-optin.portability.UnixAPI,
+  clang-analyzer-optin.taint.*,
   modernize-*,
   performance-*,
   readability-*,
   cppcoreguidelines-*,
-  -cppcoreguidelines-avoid-c-arrays,
-  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
-  -cppcoreguidelines-owning-memory,
-  -cppcoreguidelines-avoid-magic-numbers,
-  -readability-magic-numbers,
+  hicpp-*,
+  misc-*,
+  cert-*,
+  concurrency-*,
+  portability-*,
+  android-cloexec-*,
+  google-explicit-constructor,
+  google-build-using-namespace,
+  google-readability-casting,
+  google-runtime-operator,
   -modernize-use-trailing-return-type,
-  -readability-identifier-length
+  -misc-include-cleaner,
+  -cert-dcl21-cpp,
+  -cert-err58-cpp,
+  -google-readability-todo,
+  -google-readability-casting,
+  -hicpp-uppercase-literal-suffix,
+  -readability-uppercase-literal-suffix,
+  -portability-avoid-pragma-once,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -readability-function-cognitive-complexity,
+  -bugprone-throwing-static-initialization,
+  -modernize-use-std-print
 
 WarningsAsErrors: '*'
 HeaderFilterRegex: 'include/cyka/.*'
 FormatStyle: file
 CheckOptions:
+  # names: >= 3 chars everywhere, including for-loop counters (no i/j/k carve-out)
+  - key: readability-identifier-length.MinimumVariableNameLength
+    value: '3'
+  - key: readability-identifier-length.MinimumParameterNameLength
+    value: '3'
+  - key: readability-identifier-length.MinimumLoopCounterNameLength
+    value: '3'
+  - key: readability-identifier-length.MinimumExceptionNameLength
+    value: '3'
+  - key: readability-identifier-length.MinimumBindingNameLength
+    value: '3'
+  - key: readability-identifier-length.LineCountThreshold
+    value: '0'
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: '^$'
+  - key: readability-identifier-length.IgnoredParameterNames
+    value: '^$'
+  - key: readability-identifier-length.IgnoredLoopCounterNames
+    value: '^$'
+  - key: readability-identifier-length.IgnoredExceptionVariableNames
+    value: '^$'
+  - key: readability-identifier-length.IgnoredBindingNames
+    value: '^_$'
+
+  - key: modernize-use-auto.MinTypeChars
+    value: '5'
+  - key: modernize-use-constexpr.CheckMacros
+    value: 'true'
+  - key: modernize-macro-to-enum.IgnoreMacros
+    value: 'false'
+  - key: misc-unused-using-decls.StrictMode
+    value: 'true'
+  - key: misc-const-correctness.TransformValues
+    value: 'true'
+  - key: misc-const-correctness.TransformReferences
+    value: 'true'
+  - key: misc-const-correctness.TransformPointersAsValues
+    value: 'true'
+  - key: bugprone-easily-swappable-parameters.QualifiersMix
+    value: 'true'
+  - key: bugprone-narrowing-conversions.PedanticMode
+    value: 'true'
+  - key: cppcoreguidelines-narrowing-conversions.PedanticMode
+    value: 'true'
+  - key: cppcoreguidelines-avoid-magic-numbers.IgnoredIntegerValues
+    value: '0;1'
+  - key: readability-magic-numbers.IgnoredIntegerValues
+    value: '0;1'
+  - key: cppcoreguidelines-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: 'true'
+  # Same policy as cppcoreguidelines: POD aggregates (arg structs, Vec3, samples) are intentional.
+  - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: 'true'
+  - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value: 'false'
+  - key: cppcoreguidelines-special-member-functions.AllowMissingMoveFunctions
+    value: 'false'
+  - key: bugprone-unchecked-optional-access.IgnoreSmartPointerDereference
+    value: 'false'
+  - key: readability-identifier-naming.IgnoreMainLikeFunctions
+    value: 'true'
+
+  # types
+  - key: readability-identifier-naming.AbstractClassCase
+    value: CamelCase
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
   - key: readability-identifier-naming.StructCase
     value: CamelCase
-  - key: readability-identifier-naming.FunctionCase
-    value: lower_case
-  - key: readability-identifier-naming.VariableCase
-    value: lower_case
-  - key: readability-identifier-naming.ConstantCase
+  - key: readability-identifier-naming.UnionCase
     value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+  - key: readability-identifier-naming.ConceptCase
+    value: CamelCase
+
+  # namespaces
   - key: readability-identifier-naming.NamespaceCase
     value: lower_case
+  - key: readability-identifier-naming.InlineNamespaceCase
+    value: lower_case
+
+  # functions
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.GlobalFunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.ConstexprFunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.MethodCase
+    value: camelBack
+  - key: readability-identifier-naming.ClassMethodCase
+    value: camelBack
+  - key: readability-identifier-naming.PublicMethodCase
+    value: camelBack
+  - key: readability-identifier-naming.ProtectedMethodCase
+    value: camelBack
+  - key: readability-identifier-naming.PrivateMethodCase
+    value: camelBack
+  - key: readability-identifier-naming.VirtualMethodCase
+    value: camelBack
+  - key: readability-identifier-naming.ConstexprMethodCase
+    value: camelBack
+
+  # variables
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.LocalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.StaticVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.LocalPointerCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalPointerCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.LocalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.StaticConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.LocalConstantPointerCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantPointerCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.LocalConstexprVariableCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstexprVariableCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.StaticConstexprVariableCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ClassConstexprCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ClassConstantCase
+    value: UPPER_CASE
+
+  # members
+  - key: readability-identifier-naming.MemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ClassMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PublicMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstantMemberCase
+    value: UPPER_CASE
+
+  # params (must override Constant* so const params stay snake_case)
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.PointerParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstantParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstantPointerParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterPackCase
+    value: lower_case
+
+  # templates
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeTemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.ValueTemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.TemplateTemplateParameterCase
+    value: CamelCase
+
+  # macros + enumerators
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ScopedEnumConstantCase
+    value: UPPER_CASE

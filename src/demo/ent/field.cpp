@@ -5,175 +5,253 @@
 
 #include <algorithm>
 #include <unordered_set>
+#include <vector>
 
 namespace cyka::demo::ent {
 namespace {
 
-const EntSerializer* bound_serializer(const EntField& f, PolyView poly) {
-    if (f.poly_serializer_id >= 0) {
-        if (static_cast<std::size_t>(f.poly_serializer_id) < poly.size()) {
-            return poly[static_cast<std::size_t>(f.poly_serializer_id)];
+inline constexpr std::size_t VAR_TABLE_PREFIX_LEN = 4;
+inline constexpr std::size_t VAR_TABLE_NAME_OFFSET = 5;
+inline constexpr std::size_t MIN_VAR_TABLE_NAME_LEN = 6;
+
+const EntSerializer* boundSerializer(const EntField& field, PolyView poly) {
+    if (field.poly_serializer_id >= 0) {
+        if (static_cast<std::size_t>(field.poly_serializer_id) < poly.size()) {
+            return poly[static_cast<std::size_t>(field.poly_serializer_id)];
         }
-        // No per-entity state: name lookups use the default serializer.
         if (poly.empty()) {
-            return f.serializer;
+            return field.serializer;
         }
         return nullptr;
     }
-    return f.serializer;
+    return field.serializer;
 }
 
-int walk_max_poly(const EntSerializer* s, std::unordered_set<const EntSerializer*>& seen) {
-    if (s == nullptr || !seen.insert(s).second) {
-        return -1;
+int walkMaxPoly(const EntSerializer* root, std::unordered_set<const EntSerializer*>& seen) {
+    int max_id = -1;
+    std::vector<const EntSerializer*> stack;
+    if (root != nullptr) {
+        stack.push_back(root);
     }
-    int m = -1;
-    for (const auto* f : s->fields) {
-        if (f->poly_serializer_id >= 0) {
-            m = std::max(m, f->poly_serializer_id);
+    while (!stack.empty()) {
+        const EntSerializer* ser = stack.back();
+        stack.pop_back();
+        if (ser == nullptr || !seen.insert(ser).second) {
+            continue;
         }
-        m = std::max(m, walk_max_poly(f->serializer, seen));
-        for (const auto* pt : f->poly_types) {
-            m = std::max(m, walk_max_poly(pt, seen));
+        for (const auto* field : ser->fields) {
+            if (field->poly_serializer_id >= 0) {
+                max_id = std::max(max_id, field->poly_serializer_id);
+            }
+            if (field->serializer != nullptr) {
+                stack.push_back(field->serializer);
+            }
+            for (const auto* poly_type : field->poly_types) {
+                if (poly_type != nullptr) {
+                    stack.push_back(poly_type);
+                }
+            }
         }
     }
-    return m;
+    return max_id;
 }
 
 } // namespace
 
-void EntField::set_model(FieldModel m) {
-    model = m;
-    switch (m) {
-    case FieldModel::FixedArray:
-    case FieldModel::Simple:
-        decoder = find_decoder(*this);
+void EntField::setModel(FieldModel model_val) {
+    model = model_val;
+    switch (model_val) {
+    case FieldModel::FIXED_ARRAY:
+    case FieldModel::SIMPLE:
+        decoder = findDecoder(*this);
         break;
-    case FieldModel::FixedTable:
+    case FieldModel::FIXED_TABLE:
         base_decoder = DecoderSpec{};
-        base_decoder.op = poly_types.empty() ? DecOp::Bool : DecOp::PolyBase;
+        base_decoder.op = poly_types.empty() ? DecOp::BOOL : DecOp::POLY_BASE;
         break;
-    case FieldModel::VariableArray:
+    case FieldModel::VARIABLE_ARRAY:
         base_decoder = DecoderSpec{};
-        base_decoder.op = DecOp::Unsigned;
-        child_decoder = find_decoder_by_base(*this);
+        base_decoder.op = DecOp::UNSIGNED;
+        child_decoder = findDecoderByBase(*this);
         break;
-    case FieldModel::VariableTable:
+    case FieldModel::VARIABLE_TABLE:
         base_decoder = DecoderSpec{};
-        base_decoder.op = DecOp::Unsigned;
+        base_decoder.op = DecOp::UNSIGNED;
         break;
     }
 }
 
-DecodeSel EntField::select(const FieldPath& fp, int pos, PolyView poly) const {
-    switch (model) {
-    case FieldModel::FixedArray:
-        return {&decoder, this, false, true};
-    case FieldModel::FixedTable:
-        if (fp.last == pos - 1) {
-            return {&base_decoder, this, false, true};
+DecodeSel EntField::select(const FieldPath& field_path, int pos, PolyView poly) const {
+    const EntField* field = this;
+    const EntSerializer* ser = nullptr;
+    while (true) {
+        if (ser != nullptr) {
+            if (pos < 0 || pos > field_path.last) {
+                return {};
+            }
+            const auto IDX = field_path.path[static_cast<std::size_t>(pos)];
+            if (IDX < 0 || static_cast<std::size_t>(IDX) >= ser->fields.size()) {
+                return {};
+            }
+            field = ser->fields[static_cast<std::size_t>(IDX)];
+            ser = nullptr;
+            ++pos;
+            continue;
         }
-        if (const EntSerializer* ser = bound_serializer(*this, poly); ser != nullptr) {
-            return ser->select(fp, pos, poly);
+        switch (field->model) {
+        case FieldModel::FIXED_ARRAY:
+            return {.spec = &field->decoder, .field = field, .collection = false, .ok = true};
+        case FieldModel::FIXED_TABLE:
+            if (field_path.last == pos - 1) {
+                return {
+                    .spec = &field->base_decoder, .field = field, .collection = false, .ok = true};
+            }
+            ser = boundSerializer(*field, poly);
+            if (ser == nullptr) {
+                return {};
+            }
+            continue;
+        case FieldModel::VARIABLE_ARRAY:
+            if (field_path.last == pos) {
+                return {
+                    .spec = &field->child_decoder, .field = field, .collection = false, .ok = true};
+            }
+            return {.spec = &field->base_decoder, .field = field, .collection = true, .ok = true};
+        case FieldModel::VARIABLE_TABLE:
+            if (field_path.last >= pos + 1) {
+                ser = field->serializer;
+                if (ser == nullptr) {
+                    return {};
+                }
+                ++pos;
+                continue;
+            }
+            return {.spec = &field->base_decoder, .field = field, .collection = true, .ok = true};
+        case FieldModel::SIMPLE:
+        default:
+            return {.spec = &field->decoder, .field = field, .collection = false, .ok = true};
         }
-        return {};
-    case FieldModel::VariableArray:
-        if (fp.last == pos) {
-            return {&child_decoder, this, false, true};
-        }
-        return {&base_decoder, this, true, true};
-    case FieldModel::VariableTable:
-        if (fp.last >= pos + 1) {
-            return serializer != nullptr ? serializer->select(fp, pos + 1, poly) : DecodeSel{};
-        }
-        return {&base_decoder, this, true, true};
-    case FieldModel::Simple:
-    default:
-        return {&decoder, this, false, true};
     }
 }
 
-bool EntField::path_for_name(FieldPath& fp, std::string_view name, PolyView poly) const {
+bool EntField::pathForName(FieldPath& field_path, std::string_view name, PolyView poly) const {
     switch (model) {
-    case FieldModel::FixedArray:
-    case FieldModel::VariableArray: {
-        const auto n = parse_path_index(name);
-        if (!n) {
+    case FieldModel::FIXED_ARRAY:
+    case FieldModel::VARIABLE_ARRAY: {
+        const auto IDX = parsePathIndex(name);
+        if (!IDX) {
             return false;
         }
-        fp.path[static_cast<std::size_t>(fp.last)] = *n;
+        field_path.path[static_cast<std::size_t>(field_path.last)] = *IDX;
         return true;
     }
-    case FieldModel::FixedTable: {
-        const EntSerializer* ser = bound_serializer(*this, poly);
-        return ser != nullptr && ser->path_for_name(fp, name, poly);
+    case FieldModel::FIXED_TABLE: {
+        const EntSerializer* ser = boundSerializer(*this, poly);
+        return ser != nullptr && ser->pathForName(field_path, name, poly);
     }
-    case FieldModel::VariableTable: {
-        if (name.size() < 6) {
+    case FieldModel::VARIABLE_TABLE: {
+        if (name.size() < MIN_VAR_TABLE_NAME_LEN) {
             return false;
         }
-        const auto n = parse_path_index(name.substr(0, 4));
-        if (!n) {
+        const auto IDX = parsePathIndex(name.substr(0, VAR_TABLE_PREFIX_LEN));
+        if (!IDX) {
             return false;
         }
-        fp.path[static_cast<std::size_t>(fp.last)] = *n;
-        fp.push();
-        return serializer != nullptr && serializer->path_for_name(fp, name.substr(5), poly);
+        field_path.path[static_cast<std::size_t>(field_path.last)] = *IDX;
+        field_path.push();
+        return serializer != nullptr &&
+               serializer->pathForName(field_path, name.substr(VAR_TABLE_NAME_OFFSET), poly);
     }
-    case FieldModel::Simple:
+    case FieldModel::SIMPLE:
     default:
         return false;
     }
 }
 
-void EntSerializer::add_field(const EntField* f) {
-    index_by_name[f->var_name] = fields.size();
-    fields.push_back(f);
+void EntSerializer::addField(const EntField* field) {
+    index_by_name[field->var_name] = fields.size();
+    fields.push_back(field);
 }
 
-DecodeSel EntSerializer::select(const FieldPath& fp, int pos, PolyView poly) const {
-    if (pos < 0 || pos > fp.last) {
+DecodeSel EntSerializer::select(const FieldPath& field_path, int pos, PolyView poly) const {
+    if (pos < 0 || pos > field_path.last) {
         return {};
     }
-    const auto idx = fp.path[static_cast<std::size_t>(pos)];
-    if (idx < 0 || static_cast<std::size_t>(idx) >= fields.size()) {
+    const auto IDX = field_path.path[static_cast<std::size_t>(pos)];
+    if (IDX < 0 || static_cast<std::size_t>(IDX) >= fields.size()) {
         return {};
     }
-    return fields[static_cast<std::size_t>(idx)]->select(fp, pos + 1, poly);
+    return fields[static_cast<std::size_t>(IDX)]->select(field_path, pos + 1, poly);
 }
 
-bool EntSerializer::path_for_name(FieldPath& fp, std::string_view name, PolyView poly) const {
-    if (const auto it = index_by_name.find(std::string{name}); it != index_by_name.end()) {
-        fp.path[static_cast<std::size_t>(fp.last)] = static_cast<std::int32_t>(it->second);
-        return true;
+bool EntSerializer::pathForName(FieldPath& field_path, std::string_view name, PolyView poly) const {
+    const EntSerializer* ser = this;
+    std::string_view remaining = name;
+    while (ser != nullptr) {
+        const auto DOT = remaining.find('.');
+        const std::string_view SEGMENT =
+            DOT == std::string_view::npos ? remaining : remaining.substr(0, DOT);
+        const auto ITER = ser->index_by_name.find(std::string{SEGMENT});
+        if (ITER == ser->index_by_name.end()) {
+            return false;
+        }
+        field_path.path[static_cast<std::size_t>(field_path.last)] =
+            static_cast<std::int32_t>(ITER->second);
+        if (DOT == std::string_view::npos) {
+            return true;
+        }
+        field_path.push();
+        const EntField* field = ser->fields[ITER->second];
+        remaining = remaining.substr(field->var_name.size() + 1);
+        switch (field->model) {
+        case FieldModel::FIXED_TABLE:
+            ser = boundSerializer(*field, poly);
+            break;
+        case FieldModel::VARIABLE_TABLE: {
+            if (remaining.size() < MIN_VAR_TABLE_NAME_LEN) {
+                return false;
+            }
+            const auto IDX = parsePathIndex(remaining.substr(0, VAR_TABLE_PREFIX_LEN));
+            if (!IDX) {
+                return false;
+            }
+            field_path.path[static_cast<std::size_t>(field_path.last)] = *IDX;
+            field_path.push();
+            ser = field->serializer;
+            remaining = remaining.substr(VAR_TABLE_NAME_OFFSET);
+            break;
+        }
+        case FieldModel::FIXED_ARRAY:
+        case FieldModel::VARIABLE_ARRAY: {
+            // Inline leaf array handling to avoid a pathForName call cycle with EntField.
+            const auto IDX = parsePathIndex(remaining);
+            if (!IDX) {
+                return false;
+            }
+            field_path.path[static_cast<std::size_t>(field_path.last)] = *IDX;
+            return true;
+        }
+        case FieldModel::SIMPLE:
+        default:
+            return false;
+        }
     }
-    const auto dot = name.find('.');
-    if (dot == std::string_view::npos) {
-        return false;
-    }
-    const auto it = index_by_name.find(std::string{name.substr(0, dot)});
-    if (it == index_by_name.end()) {
-        return false;
-    }
-    fp.path[static_cast<std::size_t>(fp.last)] = static_cast<std::int32_t>(it->second);
-    fp.push();
-    const auto* f = fields[it->second];
-    return f->path_for_name(fp, name.substr(f->var_name.size() + 1), poly);
+    return false;
 }
 
-int EntSerializer::max_poly_id() const {
+int EntSerializer::maxPolyId() const {
     std::unordered_set<const EntSerializer*> seen;
-    return walk_max_poly(this, seen);
+    return walkMaxPoly(this, seen);
 }
 
-std::optional<std::uint64_t> EntClass::key_for(const std::string& name) const {
-    if (const auto it = key_cache.find(name); it != key_cache.end()) {
-        return it->second;
+std::optional<std::uint64_t> EntClass::keyFor(const std::string& name) const {
+    if (const auto ITER = key_cache.find(name); ITER != key_cache.end()) {
+        return ITER->second;
     }
     std::optional<std::uint64_t> key;
-    FieldPath fp;
-    if (serializer != nullptr && serializer->path_for_name(fp, name)) {
-        key = fp.key();
+    FieldPath field_path;
+    if (serializer != nullptr && serializer->pathForName(field_path, name)) {
+        key = field_path.key();
     }
     key_cache.emplace(name, key);
     return key;

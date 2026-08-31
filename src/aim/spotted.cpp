@@ -10,15 +10,15 @@
 namespace cyka::aim {
 namespace {
 
-[[nodiscard]] bool is_gun_shot(const std::string& weapon) {
-    return !weapon.empty() && weapon != "Knife" && weapon.find("Grenade") == std::string::npos &&
+[[nodiscard]] bool isGunShot(const std::string& weapon) {
+    return !weapon.empty() && weapon != "Knife" && !weapon.contains("Grenade") &&
            weapon != "Flashbang" && weapon != "Decoy" && weapon != "Molotov" &&
            weapon != "Incendiary Grenade" && weapon != "Smoke Grenade" && weapon != "Zeus x27";
 }
 
 } // namespace
 
-void spotted_enrich(const VisibilityBatch& vis, Match& match, const Samples& samples) {
+void spottedEnrich(const VisibilityBatch& vis, Match& match, const Samples& samples) {
     if (!vis.ready()) {
         return;
     }
@@ -28,41 +28,41 @@ void spotted_enrich(const VisibilityBatch& vis, Match& match, const Samples& sam
     };
     std::vector<std::size_t> idxs;
     idxs.reserve(samples.shots.size());
-    for (std::size_t i = 0; i < samples.shots.size(); ++i) {
-        if (is_gun_shot(samples.shots[i].weapon)) {
-            idxs.push_back(i);
+    for (std::size_t shot_idx = 0; shot_idx < samples.shots.size(); ++shot_idx) {
+        if (isGunShot(samples.shots[shot_idx].weapon)) {
+            idxs.push_back(shot_idx);
         }
     }
     std::vector<char> sees(idxs.size(), 0);
-    parallel_for(idxs.size(), [&](std::size_t i) {
-        if (shot_sees_enemy(vis, match, samples.shots[idxs[i]])) {
-            sees[i] = 1;
+    parallelFor(idxs.size(), [&](std::size_t par_idx) {
+        if (shotSeesEnemy(vis, match, samples.shots[idxs[par_idx]])) {
+            sees[par_idx] = 1;
         }
     });
-    std::unordered_map<SteamId, Acc> by;
-    for (std::size_t i = 0; i < idxs.size(); ++i) {
-        if (!sees[i]) {
+    std::unordered_map<SteamId, Acc> by_steam;
+    for (std::size_t par_idx = 0; par_idx < idxs.size(); ++par_idx) {
+        if (sees[par_idx] == 0) {
             continue;
         }
-        const ShotSample& shot = samples.shots[idxs[i]];
-        auto& acc = by[shot.steam_id];
+        const ShotSample& shot = samples.shots[idxs[par_idx]];
+        auto& acc = by_steam[shot.steam_id];
         ++acc.shots;
         if (shot.hit) {
             ++acc.hits;
         }
     }
-    for (auto& [steam_id, acc] : by) {
+    for (auto& [steam_id, acc] : by_steam) {
         if (acc.shots == 0) {
             continue;
         }
-        auto pit = match.players.find(steam_id);
-        if (pit == match.players.end()) {
+        auto piter = match.players.find(steam_id);
+        if (piter == match.players.end()) {
             continue;
         }
-        if (!pit->second.aim) {
-            pit->second.aim = PlayerAim{};
+        if (!piter->second.aim) {
+            piter->second.aim = PlayerAim{};
         }
-        pit->second.aim->spotted_accuracy_pct = 100.0 * acc.hits / acc.shots;
+        piter->second.aim->spotted_accuracy_pct = 100.0 * acc.hits / acc.shots;
     }
 }
 

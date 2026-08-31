@@ -1,36 +1,37 @@
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <string_view>
 
 namespace cyka {
 
 /// Analyzer / IO failure codes. Message helpers live in error.cpp if needed later.
-enum class Error {
-    Ok = 0,
-    Io,
-    InvalidArgument,
-    Parse,
-    Unsupported,
-    Mesh,
-    NotFound,
+enum class Error : std::uint8_t {
+    OK = 0,
+    IO,
+    INVALID_ARGUMENT,
+    PARSE,
+    UNSUPPORTED,
+    MESH,
+    NOT_FOUND,
 };
 
-[[nodiscard]] constexpr std::string_view to_string(Error e) noexcept {
-    switch (e) {
-    case Error::Ok:
+[[nodiscard]] constexpr std::string_view toString(Error err) noexcept {
+    switch (err) {
+    case Error::OK:
         return "ok";
-    case Error::Io:
+    case Error::IO:
         return "io";
-    case Error::InvalidArgument:
+    case Error::INVALID_ARGUMENT:
         return "invalid_argument";
-    case Error::Parse:
+    case Error::PARSE:
         return "parse";
-    case Error::Unsupported:
+    case Error::UNSUPPORTED:
         return "unsupported";
-    case Error::Mesh:
+    case Error::MESH:
         return "mesh";
-    case Error::NotFound:
+    case Error::NOT_FOUND:
         return "not_found";
     }
     return "unknown";

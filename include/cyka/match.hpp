@@ -24,14 +24,14 @@ struct Team {
 
 /// Mesh / calibration availability (`aim_meta`).
 struct AimMeta {
-    bool mesh_loaded{false};    // json: mesh_loaded
+    bool meshloaded{false};    // json: meshloaded
     std::string calibration_id; // json: calibration_id
 };
 
 /// Root analyze output. Owns unique kill/round data; players keyed by steamId.
 class Match {
-public:
-    int schema_version{kSchemaVersion}; // json: schema_version
+  public:
+    int schema_version{SCHEMA_VERSION}; // json: schema_version
     std::string file_hash;              // json: file_hash
     std::string map_name;               // json: mapName
     int tick_count{0};                  // json: tickCount

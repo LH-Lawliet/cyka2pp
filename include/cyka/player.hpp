@@ -57,7 +57,7 @@ struct PlayerAim {
 
 /// Scoreboard + extended player (`players` map values). camelCase keys noted.
 class Player {
-public:
+  public:
     SteamId steam_id;   // json: steamId
     std::string name;   // json: name
     int user_id{0};     // json: userId

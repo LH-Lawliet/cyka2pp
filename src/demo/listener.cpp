@@ -2,153 +2,161 @@
 
 #include "cyka/demo/steam_id.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
 namespace cyka::demo {
 
-void CollectingListener::set_map(std::string map, std::string workshop) {
-    raw_.map_name = std::move(map);
-    raw_.workshop_id = std::move(workshop);
+namespace {
+
+inline constexpr double MS_PER_SEC = 1000.0;
+inline constexpr std::int32_t INVALID_USERID = 65535;
+inline constexpr std::uint32_t USERID_BYTE_MASK = 0xffU;
+inline constexpr std::int32_t USERID_SHORT_MAX = 0xffff;
+
+} // namespace
+
+void CollectingListener::setMap(std::string map, std::string workshop) {
+    raw().map_name = std::move(map);
+    raw().workshop_id = std::move(workshop);
 }
 
-void CollectingListener::set_ticks(int ticks, double tickrate) {
-    raw_.ticks = ticks;
-    if (tickrate > 0) {
-        raw_.tickrate = tickrate;
+void CollectingListener::setTicks(TickClock clock) {
+    raw().ticks = clock.ticks;
+    if (clock.tickrate > 0) {
+        raw().tickrate = clock.tickrate;
     }
-    if (raw_.tickrate > 0) {
-        raw_.duration_ms = static_cast<Millis>(std::llround(ticks / raw_.tickrate * 1000.0));
+    if (raw().tickrate > 0) {
+        raw().duration_ms =
+            static_cast<Millis>(std::llround(clock.ticks / raw().tickrate * MS_PER_SEC));
     }
 }
 
-void CollectingListener::on_userinfo(const UserInfoById& users) {
-    users_ = users;
-    for (const auto& [uid, u] : users) {
-        if (u.xuid == 0 || u.ishltv || u.fakeplayer || !is_individual_steam64(u.xuid)) {
+void CollectingListener::onUserinfo(const UserInfoById& users) {
+    this->users = users;
+    for (const auto& [uid, user] : users) {
+        if (user.xuid == 0 || user.ishltv || user.fakeplayer || !isIndividualSteam64(user.xuid)) {
             continue;
         }
-        ensure_player(std::to_string(u.xuid), u.name, u.user_id);
+        ensurePlayer(std::to_string(user.xuid), user.name, user.user_id);
     }
 }
 
-SteamId CollectingListener::steam_for_userid(std::int32_t userid) const {
-    if (userid < 0 || userid == 65535) {
+SteamId CollectingListener::steamForUserid(std::int32_t userid) const {
+    if (userid < 0 || userid == INVALID_USERID) {
         return {};
     }
     // Match demoinfocs playerByUserID32: low byte is the string-table slot.
     // Some CS2 players (e.g. reconnect ghosts) report userid 0 but still occupy
     // userinfo slot 0 with a real xuid — do not treat 0 as "no player".
-    const std::int32_t masked =
-        userid <= static_cast<std::int32_t>(0xffff) ? (userid & 0xff) : userid;
+    const std::int32_t MASKED =
+        userid <= USERID_SHORT_MAX
+            ? static_cast<std::int32_t>(static_cast<std::uint32_t>(userid) & USERID_BYTE_MASK)
+            : userid;
 
-    auto it = users_.find(masked);
-    if (it != users_.end() && is_individual_steam64(it->second.xuid) && !it->second.ishltv) {
-        return std::to_string(it->second.xuid);
+    auto iter = users.find(MASKED);
+    if (iter != users.end() && isIndividualSteam64(iter->second.xuid) && !iter->second.ishltv) {
+        return std::to_string(iter->second.xuid);
     }
     if (userid != 0) {
-        it = users_.find(userid);
-        if (it != users_.end() && is_individual_steam64(it->second.xuid)) {
-            return std::to_string(it->second.xuid);
+        iter = users.find(userid);
+        if (iter != users.end() && isIndividualSteam64(iter->second.xuid)) {
+            return std::to_string(iter->second.xuid);
         }
-        it = users_.find(masked + 1);
-        if (it != users_.end() && is_individual_steam64(it->second.xuid)) {
-            return std::to_string(it->second.xuid);
+        iter = users.find(MASKED + 1);
+        if (iter != users.end() && isIndividualSteam64(iter->second.xuid)) {
+            return std::to_string(iter->second.xuid);
         }
     }
     return {};
 }
 
-std::string CollectingListener::name_for_userid(std::int32_t userid) const {
+std::string CollectingListener::nameForUserid(std::int32_t userid) const {
     if (userid <= 0) {
         return {};
     }
-    const std::int32_t masked =
-        userid <= static_cast<std::int32_t>(0xffff) ? (userid & 0xff) : userid;
-    auto it = users_.find(masked);
-    if (it != users_.end()) {
-        return it->second.name;
+    const std::int32_t MASKED =
+        userid <= USERID_SHORT_MAX
+            ? static_cast<std::int32_t>(static_cast<std::uint32_t>(userid) & USERID_BYTE_MASK)
+            : userid;
+    auto iter = users.find(MASKED);
+    if (iter != users.end()) {
+        return iter->second.name;
     }
-    it = users_.find(userid);
-    return it == users_.end() ? std::string{} : it->second.name;
+    iter = users.find(userid);
+    return iter == users.end() ? std::string{} : iter->second.name;
 }
 
-void CollectingListener::ensure_player(const SteamId& steam, const std::string& name, int userid) {
-    if (steam.empty() || !is_individual_steam64(steam)) {
+void CollectingListener::ensurePlayer(const SteamId& steam, const std::string& name, int userid) {
+    if (steam.empty() || !isIndividualSteam64(steam)) {
         return;
     }
-    for (auto& p : raw_.players) {
-        if (p.steam_id == steam) {
-            if (looks_like_player_name(name)) {
-                p.name = name;
+    for (auto& player : raw().players) {
+        if (player.steam_id == steam) {
+            if (looksLikePlayerName(name)) {
+                player.name = name;
             }
-            if (userid) {
-                p.user_id = userid;
+            if (userid != 0) {
+                player.user_id = userid;
             }
             return;
         }
     }
-    RawPlayer p;
-    p.steam_id = steam;
-    p.name = looks_like_player_name(name) ? name : steam;
-    p.user_id = userid;
+    RawPlayer player;
+    player.steam_id = steam;
+    player.name = looksLikePlayerName(name) ? name : steam;
+    player.user_id = userid;
     // Leave team unset until player_team / finish(); defaulting to "A" kept
     // inactive entity ghosts on the scoreboard.
-    raw_.players.push_back(std::move(p));
+    raw().players.push_back(std::move(player));
 }
 
-RawPlayer* CollectingListener::find_player(const SteamId& steam) {
+RawPlayer* CollectingListener::findPlayer(const SteamId& steam) {
     if (steam.empty()) {
         return nullptr;
     }
-    for (auto& p : raw_.players) {
-        if (p.steam_id == steam) {
-            return &p;
+    for (auto& player : raw().players) {
+        if (player.steam_id == steam) {
+            return &player;
         }
     }
     return nullptr;
 }
 
-void CollectingListener::note_team(const SteamId& steam, int team) {
-    if (steam.empty() || team < 2 || team > 3) {
+void CollectingListener::noteTeam(const SteamId& steam, int team) {
+    if (steam.empty() || team < TEAM_T || team > TEAM_CT) {
         return;
     }
-    if (!team_of_.contains(steam)) {
-        team_of_[steam] = side_letter_[team];
+    if (!team_of.contains(steam)) {
+        team_of[steam] = side_letter[team];
     }
 }
 
-void CollectingListener::note_mvp_count(const SteamId& steam, int mvp_count) {
+void CollectingListener::noteMvpCount(const SteamId& steam, int mvp_count) {
     if (steam.empty() || mvp_count < 0) {
         return;
     }
-    if (auto* p = find_player(steam)) {
-        if (mvp_count > p->mvp_count) {
-            p->mvp_count = mvp_count;
-        }
+    if (auto* player = findPlayer(steam)) {
+        player->mvp_count = std::max(player->mvp_count, mvp_count);
     }
 }
 
-void CollectingListener::note_rank(const SteamId& steam, int rank_type, int ranking,
-                                   int competitive_wins) {
-    if (steam.empty()) {
+void CollectingListener::noteRank(const PlayerRank& rank) {
+    if (rank.steam.empty()) {
         return;
     }
-    auto* p = find_player(steam);
-    if (p == nullptr) {
+    auto* player = findPlayer(rank.steam);
+    if (player == nullptr) {
         return;
     }
     // Prefer a known mode once seen; demos usually keep a constant RankType.
-    if (rank_type > 0) {
-        p->rank_type = rank_type;
+    if (rank.rank_type > 0) {
+        player->rank_type = rank.rank_type;
     }
     // Ranking can start at 0 (unranked) then populate; keep the highest.
-    if (ranking > p->ranking) {
-        p->ranking = ranking;
-    }
-    if (competitive_wins > p->competitive_wins) {
-        p->competitive_wins = competitive_wins;
-    }
+    player->ranking = std::max(player->ranking, rank.ranking);
+    player->competitive_wins = std::max(player->competitive_wins, rank.competitive_wins);
 }
 
 } // namespace cyka::demo

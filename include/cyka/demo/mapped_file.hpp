@@ -5,36 +5,35 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <memory>
 #include <span>
 
 namespace cyka::demo {
 
 /// Read-only memory-mapped file. Owns the mapping; views via `bytes()`.
 class MappedFile {
-public:
+  public:
     MappedFile() = default;
     MappedFile(const MappedFile&) = delete;
     MappedFile& operator=(const MappedFile&) = delete;
-    MappedFile(MappedFile&&) noexcept;
-    MappedFile& operator=(MappedFile&&) noexcept;
+    MappedFile(MappedFile&& other) noexcept;
+    MappedFile& operator=(MappedFile&& other) noexcept;
     ~MappedFile();
 
     [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept {
-        return {data_, size_};
+        return {mapped_ptr, byte_count};
     }
-    [[nodiscard]] std::size_t size() const noexcept { return size_; }
-    [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
+    [[nodiscard]] std::size_t size() const noexcept { return byte_count; }
+    [[nodiscard]] bool empty() const noexcept { return byte_count == 0; }
 
-private:
-    friend Result<MappedFile> map_file(const std::filesystem::path& path);
+  private:
+    friend Result<MappedFile> mapFile(const std::filesystem::path& path);
 
-    std::uint8_t* data_{nullptr};
-    std::size_t size_{0};
-    int fd_{-1};
+    std::uint8_t* mapped_ptr{nullptr};
+    std::size_t byte_count{0};
+    int file_desc{-1};
 };
 
 /// mmap(PROT_READ) a demo file. Returns Error::Io / NotFound on failure.
-[[nodiscard]] Result<MappedFile> map_file(const std::filesystem::path& path);
+[[nodiscard]] Result<MappedFile> mapFile(const std::filesystem::path& path);
 
 } // namespace cyka::demo

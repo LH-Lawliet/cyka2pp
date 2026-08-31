@@ -15,6 +15,6 @@ using Tick = std::int32_t;
 using Millis = std::int64_t;
 
 /// Schema version for the match JSON root (`schema_version`).
-inline constexpr int kSchemaVersion = 1;
+inline constexpr int SCHEMA_VERSION = 1;
 
 } // namespace cyka

@@ -6,50 +6,59 @@
 #include "cyka/demo/proto_wire.hpp"
 
 namespace cyka::demo {
+namespace {
 
-std::span<const std::uint8_t> packet_data_field(std::span<const std::uint8_t> body) {
-    return find_bytes_field(body, 3); // CDemoPacket.data
+inline constexpr int PROTO_FIELD_PACKET_DATA = 3;
+inline constexpr int PROTO_FIELD_FULL_PACKET = 2;
+inline constexpr unsigned MIN_MESSAGE_BITS = 7U;
+inline constexpr std::uint32_t MAX_MESSAGE_BYTES = 8'000'000U;
+
+} // namespace
+
+std::span<const std::uint8_t> packetDataField(std::span<const std::uint8_t> body) {
+    return findBytesField(body, PROTO_FIELD_PACKET_DATA);
 }
 
-std::span<const std::uint8_t> full_packet_data_field(std::span<const std::uint8_t> body,
-                                                    std::vector<std::uint8_t>& scratch) {
-    auto pkt = find_bytes_field(body, 2);
+std::span<const std::uint8_t> fullPacketDataField(std::span<const std::uint8_t> body,
+                                                  std::vector<std::uint8_t>& scratch) {
+    auto pkt = findBytesField(body, PROTO_FIELD_FULL_PACKET);
     if (pkt.empty()) {
         scratch.clear();
         return {};
     }
-    return find_bytes_field(pkt, 3);
+    return findBytesField(pkt, PROTO_FIELD_PACKET_DATA);
 }
 
-void walk_packet_data(std::span<const std::uint8_t> data, EventDescMap& descs,
-                      const std::function<void(const GameEvent&)>& on_event,
-                      const std::function<void(const NetMessage&)>& on_net) {
+void walkPacketData(std::span<const std::uint8_t> data,
+                    EventDescMap& descs,
+                    const std::function<void(const GameEvent&)>& on_event,
+                    const std::function<void(const NetMessage&)>& on_net) {
     if (data.empty()) {
         return;
     }
-    BitReader br(data);
-    while (br.remaining_bits() > 7) {
-        auto type = br.read_ubit_int();
+    BitReader reader(data);
+    while (reader.remainingBits() > MIN_MESSAGE_BITS) {
+        auto type = reader.readUbitInt();
         if (!type) {
             break;
         }
-        auto size = br.read_varint_u32();
-        if (!size || *size > 8'000'000) {
+        auto size = reader.readVarintU32();
+        if (!size || *size > MAX_MESSAGE_BYTES) {
             break;
         }
-        auto buf = br.read_bytes(*size);
+        auto buf = reader.readBytes(*size);
         if (!buf) {
             break;
         }
-        const NetMessage nm{*type, *buf};
+        const NetMessage NET_MSG{.type = *type, .payload = *buf};
         if (on_net) {
-            on_net(nm);
+            on_net(NET_MSG);
         }
-        if (*type == kMsgGameEventList) {
-            parse_game_event_list(*buf, descs);
-        } else if (*type == kMsgGameEvent) {
-            if (auto ev = parse_game_event(*buf, descs)) {
-                on_event(*ev);
+        if (*type == MSG_GAME_EVENT_LIST) {
+            parseGameEventList(*buf, descs);
+        } else if (*type == MSG_GAME_EVENT) {
+            if (auto event = parseGameEvent(*buf, descs)) {
+                on_event(*event);
             }
         }
     }

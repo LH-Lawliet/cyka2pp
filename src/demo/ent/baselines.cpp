@@ -6,7 +6,6 @@
 #include "cyka/demo/ent/string_table_blob.hpp"
 #include "cyka/demo/proto_wire.hpp"
 
-#include <charconv>
 #include <optional>
 #include <string>
 #include <vector>
@@ -15,57 +14,73 @@ namespace cyka::demo::ent {
 namespace {
 
 using cyka::demo::ByteReader;
-using cyka::demo::kWireLen;
+using cyka::demo::WIRE_LEN;
 
-constexpr std::string_view kTableName = "instancebaseline";
+constexpr std::string_view TABLE_NAME = "instancebaseline";
+inline constexpr int DECIMAL_RADIX = 10;
+inline constexpr int PROTO_FIELD_NAME = 1;
+inline constexpr int PROTO_FIELD_NUM_ENTRIES = 2;
+inline constexpr int PROTO_FIELD_USER_DATA_FIXED = 3;
+inline constexpr int PROTO_FIELD_USER_DATA_SIZE = 4;
+inline constexpr int PROTO_FIELD_FLAGS = 6;
+inline constexpr int PROTO_FIELD_STRING_DATA = 7;
+inline constexpr int PROTO_FIELD_COMPRESSED = 9;
+inline constexpr int PROTO_FIELD_VARINT_BITCOUNTS = 10;
+inline constexpr int PROTO_FIELD_TABLE_LIST = 1;
+inline constexpr int PROTO_FIELD_TABLE_ITEMS = 2;
+inline constexpr int PROTO_FIELD_ITEM_KEY = 1;
+inline constexpr int PROTO_FIELD_ITEM_DATA = 2;
+inline constexpr int PROTO_FIELD_UPDATE_ENTRIES = 2;
+inline constexpr int PROTO_FIELD_UPDATE_DATA = 3;
 
 /// Keys are plain server-class ids; `"<class>:<n>"` alternate baselines are
 /// not used by this parser and are skipped.
-std::optional<std::int32_t> class_id_from_key(std::string_view key) {
-    if (key.empty() || key.find(':') != std::string_view::npos) {
+std::optional<std::int32_t> classIdFromKey(std::string_view key) {
+    if (key.empty() || key.contains(':')) {
         return std::nullopt;
     }
-    std::int32_t v = 0;
-    const auto* end = key.data() + key.size();
-    const auto res = std::from_chars(key.data(), end, v);
-    if (res.ec != std::errc{} || res.ptr != end) {
-        return std::nullopt;
+    std::int32_t value = 0;
+    for (const char CHR : key) {
+        if (CHR < '0' || CHR > '9') {
+            return std::nullopt;
+        }
+        value = (value * DECIMAL_RADIX) + (CHR - '0');
     }
-    return v;
+    return value;
 }
 
-StringTableSpec read_spec(std::span<const std::uint8_t> msg, std::string& name) {
+StringTableSpec readSpec(std::span<const std::uint8_t> msg, std::string& name) {
     StringTableSpec spec;
-    ByteReader r(msg);
-    while (auto f = cyka::demo::read_field(r)) {
-        switch (f->field) {
-        case 1:
-            if (f->wire == kWireLen) {
-                name = std::string{cyka::demo::as_string(f->bytes)};
+    ByteReader reader(msg);
+    while (auto field = cyka::demo::readField(reader)) {
+        switch (field->field) {
+        case PROTO_FIELD_NAME:
+            if (field->wire == WIRE_LEN) {
+                name = std::string{cyka::demo::asString(field->bytes)};
             }
             break;
-        case 2:
-            spec.num_entries = static_cast<std::int32_t>(f->varint);
+        case PROTO_FIELD_NUM_ENTRIES:
+            spec.num_entries = static_cast<std::int32_t>(field->varint);
             break;
-        case 3:
-            spec.user_data_fixed = f->varint != 0;
+        case PROTO_FIELD_USER_DATA_FIXED:
+            spec.user_data_fixed = field->varint != 0;
             break;
-        case 4:
-            spec.user_data_size = static_cast<std::int32_t>(f->varint);
+        case PROTO_FIELD_USER_DATA_SIZE:
+            spec.user_data_size = static_cast<std::int32_t>(field->varint);
             break;
-        case 6:
-            spec.flags = static_cast<std::int32_t>(f->varint);
+        case PROTO_FIELD_FLAGS:
+            spec.flags = static_cast<std::int32_t>(field->varint);
             break;
-        case 7:
-            if (f->wire == kWireLen) {
-                spec.string_data = f->bytes;
+        case PROTO_FIELD_STRING_DATA:
+            if (field->wire == WIRE_LEN) {
+                spec.string_data = field->bytes;
             }
             break;
-        case 9:
-            spec.compressed = f->varint != 0;
+        case PROTO_FIELD_COMPRESSED:
+            spec.compressed = field->varint != 0;
             break;
-        case 10:
-            spec.varint_bitcounts = f->varint != 0;
+        case PROTO_FIELD_VARINT_BITCOUNTS:
+            spec.varint_bitcounts = field->varint != 0;
             break;
         default:
             break;
@@ -74,55 +89,55 @@ StringTableSpec read_spec(std::span<const std::uint8_t> msg, std::string& name) 
     return spec;
 }
 
-StringTableEntryFn baseline_sink(EntityContext& ctx) {
+StringTableEntryFn baselineSink(EntityContext& ctx) {
     return [&ctx](const std::string& key, std::vector<std::uint8_t>&& value) {
-        if (const auto class_id = class_id_from_key(key)) {
-            ctx.set_baseline(*class_id, std::move(value));
+        if (const auto CLASS_ID = classIdFromKey(key)) {
+            ctx.setBaseline(*CLASS_ID, std::move(value));
         }
     };
 }
 
 } // namespace
 
-void ingest_baseline_tables(std::span<const std::uint8_t> body, EntityContext& ctx) {
-    cyka::demo::for_each_message(body, 1, [&](std::span<const std::uint8_t> table) {
-        if (cyka::demo::find_string_field(table, 1) != kTableName) {
-            return;
-        }
-        cyka::demo::for_each_message(table, 2, [&](std::span<const std::uint8_t> item) {
-            const std::string key = cyka::demo::find_string_field(item, 1);
-            const auto data = cyka::demo::find_bytes_field(item, 2);
-            const auto class_id = class_id_from_key(key);
-            if (!class_id || data.empty()) {
+void ingestBaselineTables(std::span<const std::uint8_t> body, EntityContext& ctx) {
+    cyka::demo::forEachMessage(
+        body, PROTO_FIELD_TABLE_LIST, [&](std::span<const std::uint8_t> table) {
+            if (cyka::demo::findStringField(table, PROTO_FIELD_NAME) != TABLE_NAME) {
                 return;
             }
-            ctx.set_baseline(*class_id, std::vector<std::uint8_t>(data.begin(), data.end()));
+            cyka::demo::forEachMessage(
+                table, PROTO_FIELD_TABLE_ITEMS, [&](std::span<const std::uint8_t> item) {
+                    const std::string KEY = cyka::demo::findStringField(item, PROTO_FIELD_ITEM_KEY);
+                    const auto DATA = cyka::demo::findBytesField(item, PROTO_FIELD_ITEM_DATA);
+                    const auto CLASS_ID = classIdFromKey(KEY);
+                    if (!CLASS_ID || DATA.empty()) {
+                        return;
+                    }
+                    ctx.setBaseline(*CLASS_ID, std::vector<std::uint8_t>(DATA.begin(), DATA.end()));
+                });
         });
-    });
 }
 
-std::string on_create_string_table(std::span<const std::uint8_t> msg, EntityContext& ctx) {
+std::string onCreateStringTable(std::span<const std::uint8_t> msg, EntityContext& ctx) {
     std::string name;
-    const StringTableSpec spec = read_spec(msg, name);
-    if (name == kTableName) {
-        parse_string_table(spec, baseline_sink(ctx));
+    const StringTableSpec SPEC = readSpec(msg, name);
+    if (name == TABLE_NAME) {
+        parseStringTable(SPEC, baselineSink(ctx));
     }
     return name;
 }
 
-void on_update_string_table(std::span<const std::uint8_t> msg, EntityContext& ctx) {
-    // instancebaseline is created with flags=0 and variable-size user data, so
-    // the update blob reuses the same 17-bit byte-count encoding.
+void onUpdateStringTable(std::span<const std::uint8_t> msg, EntityContext& ctx) {
     StringTableSpec spec;
-    ByteReader r(msg);
-    while (auto f = cyka::demo::read_field(r)) {
-        if (f->field == 2) {
-            spec.num_entries = static_cast<std::int32_t>(f->varint);
-        } else if (f->field == 3 && f->wire == kWireLen) {
-            spec.string_data = f->bytes;
+    ByteReader reader(msg);
+    while (auto field = cyka::demo::readField(reader)) {
+        if (field->field == PROTO_FIELD_UPDATE_ENTRIES) {
+            spec.num_entries = static_cast<std::int32_t>(field->varint);
+        } else if (field->field == PROTO_FIELD_UPDATE_DATA && field->wire == WIRE_LEN) {
+            spec.string_data = field->bytes;
         }
     }
-    parse_string_table_blob(spec, spec.string_data, baseline_sink(ctx));
+    parseStringTableBlob(spec, spec.string_data, baselineSink(ctx));
 }
 
 } // namespace cyka::demo::ent

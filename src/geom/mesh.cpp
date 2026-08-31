@@ -1,8 +1,6 @@
 #include "cyka/geom/mesh.hpp"
+
 #include <algorithm>
-
-#include "cyka/geom/bvh.hpp"
-
 #include <cstring>
 #include <fstream>
 #include <vector>
@@ -10,116 +8,135 @@
 namespace cyka::geom {
 namespace {
 
-[[nodiscard]] bool read_exact(std::ifstream& in, void* dst, std::size_t n) {
-    return static_cast<bool>(in.read(static_cast<char*>(dst), static_cast<std::streamsize>(n)));
+inline constexpr std::size_t TRI_MAGIC_BYTES = 4;
+inline constexpr std::size_t FLOATS_PER_TRI = 9;
+inline constexpr int VERT_X = 0;
+inline constexpr int VERT_Y = 1;
+inline constexpr int VERT_Z = 2;
+inline constexpr int VERT_BX = 3;
+inline constexpr int VERT_BY = 4;
+inline constexpr int VERT_BZ = 5;
+inline constexpr int VERT_CX = 6;
+inline constexpr int VERT_CY = 7;
+inline constexpr int VERT_CZ = 8;
+
+[[nodiscard]] bool readExact(std::ifstream& input, void* dst, std::size_t num_bytes) {
+    return static_cast<bool>(
+        input.read(static_cast<char*>(dst), static_cast<std::streamsize>(num_bytes)));
 }
 
 } // namespace
 
-std::filesystem::path map_file(const std::filesystem::path& dir, std::string_view workshop_id,
-                               std::string_view map_name) {
-    const std::string key = workshop_id.empty() ? std::string{map_name} : std::string{workshop_id};
-    return dir / (key + ".tri");
+std::filesystem::path mapFile(
+    const std::filesystem::path& dir, std::string_view workshop_id, std::string_view map_name) {
+    const std::string KEY = workshop_id.empty() ? std::string{map_name} : std::string{workshop_id};
+    return dir / (KEY + ".tri");
 }
 
-bool Triangle::blocks(Vec3 orig, Vec3 dir) const noexcept {
-    return static_cast<bool>(intersect(orig, dir));
+bool Triangle::blocks(Ray ray) const noexcept {
+    return static_cast<bool>(intersect(ray));
 }
 
-std::optional<double> Triangle::intersect(Vec3 orig, Vec3 dir) const noexcept {
-    const Vec3 pvec = dir.cross(e2);
-    const double det = e1.dot(pvec);
-    if (det > -kEpsilon && det < kEpsilon) {
+std::optional<double> Triangle::intersect(Ray ray) const noexcept {
+    const Vec3 PVEC = ray.dir.cross(e2);
+    const double DET = e1.dot(PVEC);
+    if (DET > -EPSILON && DET < EPSILON) {
         return std::nullopt;
     }
-    const double inv = 1.0 / det;
-    const Vec3 tvec = orig.sub(a);
-    const double u = tvec.dot(pvec) * inv;
-    if (u < 0.0 || u > 1.0) {
+    const double INV = 1.0 / DET;
+    const Vec3 TVEC = ray.origin.sub(a);
+    const double BARY_U = TVEC.dot(PVEC) * INV;
+    if (BARY_U < 0.0 || BARY_U > 1.0) {
         return std::nullopt;
     }
-    const Vec3 qvec = tvec.cross(e1);
-    const double v = dir.dot(qvec) * inv;
-    if (v < 0.0 || u + v > 1.0) {
+    const Vec3 QVEC = TVEC.cross(e1);
+    const double BARY_V = ray.dir.dot(QVEC) * INV;
+    if (BARY_V < 0.0 || BARY_U + BARY_V > 1.0) {
         return std::nullopt;
     }
-    const double hit = e2.dot(qvec) * inv;
-    if (hit > kEpsilon && hit < 1.0 - kEpsilon) {
-        return hit;
+    const double HIT = e2.dot(QVEC) * INV;
+    if (HIT > EPSILON && HIT < 1.0 - EPSILON) {
+        return HIT;
     }
     return std::nullopt;
 }
 
-Result<std::unique_ptr<Mesh>> load_mesh(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        return std::unexpected(Error::NotFound);
+Result<std::unique_ptr<Mesh>> loadMesh(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return std::unexpected(Error::NOT_FOUND);
     }
 
-    std::uint8_t magic[4]{};
-    if (!read_exact(in, magic, 4)) {
-        return std::unexpected(Error::Io);
+    std::array<std::uint8_t, TRI_MAGIC_BYTES> magic{};
+    if (!readExact(input, magic.data(), magic.size())) {
+        return std::unexpected(Error::IO);
     }
-    if (std::memcmp(magic, kTriMagic, 4) != 0) {
-        return std::unexpected(Error::Mesh);
+    if (magic != TRI_MAGIC) {
+        return std::unexpected(Error::MESH);
     }
 
     std::uint32_t count = 0;
-    if (!read_exact(in, &count, sizeof(count))) {
-        return std::unexpected(Error::Io);
+    if (!readExact(input, &count, sizeof(count))) {
+        return std::unexpected(Error::IO);
     }
 
-    std::vector<float> verts(static_cast<std::size_t>(count) * 9U);
-    if (count > 0 && !read_exact(in, verts.data(), verts.size() * sizeof(float))) {
-        return std::unexpected(Error::Io);
+    std::vector<float> verts(static_cast<std::size_t>(count) * FLOATS_PER_TRI);
+    if (count > 0 && !readExact(input, verts.data(), verts.size() * sizeof(float))) {
+        return std::unexpected(Error::IO);
     }
 
     auto mesh = std::make_unique<Mesh>();
-    mesh->tris_.resize(count);
-    for (std::uint32_t i = 0; i < count; ++i) {
-        const float* v = verts.data() + static_cast<std::size_t>(i) * 9U;
-        Triangle& t = mesh->tris_[i];
-        t.a = {static_cast<double>(v[0]), static_cast<double>(v[1]), static_cast<double>(v[2])};
-        t.b = {static_cast<double>(v[3]), static_cast<double>(v[4]), static_cast<double>(v[5])};
-        t.c = {static_cast<double>(v[6]), static_cast<double>(v[7]), static_cast<double>(v[8])};
-        t.e1 = t.b.sub(t.a);
-        t.e2 = t.c.sub(t.a);
+    mesh->tris.resize(count);
+    for (std::uint32_t idx = 0; idx < count; ++idx) {
+        const std::size_t BASE = static_cast<std::size_t>(idx) * FLOATS_PER_TRI;
+        Triangle& tri = mesh->tris[idx];
+        tri.a = {.pos_x = static_cast<double>(verts[BASE + VERT_X]),
+                 .pos_y = static_cast<double>(verts[BASE + VERT_Y]),
+                 .pos_z = static_cast<double>(verts[BASE + VERT_Z])};
+        tri.b = {.pos_x = static_cast<double>(verts[BASE + VERT_BX]),
+                 .pos_y = static_cast<double>(verts[BASE + VERT_BY]),
+                 .pos_z = static_cast<double>(verts[BASE + VERT_BZ])};
+        tri.c = {.pos_x = static_cast<double>(verts[BASE + VERT_CX]),
+                 .pos_y = static_cast<double>(verts[BASE + VERT_CY]),
+                 .pos_z = static_cast<double>(verts[BASE + VERT_CZ])};
+        tri.e1 = tri.b.sub(tri.a);
+        tri.e2 = tri.c.sub(tri.a);
     }
-    mesh->build_bvh();
+    mesh->buildBvh();
     return mesh;
 }
 
-std::unique_ptr<Mesh> mesh_from_triangles(std::vector<Triangle> tris) {
+std::unique_ptr<Mesh> meshFromTriangles(std::vector<Triangle> tris) {
     auto mesh = std::make_unique<Mesh>();
-    mesh->tris_ = std::move(tris);
-    for (Triangle& t : mesh->tris_) {
-        t.e1 = t.b.sub(t.a);
-        t.e2 = t.c.sub(t.a);
+    mesh->tris = std::move(tris);
+    for (Triangle& tri : mesh->tris) {
+        tri.e1 = tri.b.sub(tri.a);
+        tri.e2 = tri.c.sub(tri.a);
     }
-    mesh->build_bvh();
+    mesh->buildBvh();
     return mesh;
 }
 
 void Mesh::bounds(Vec3& out_min, Vec3& out_max) const noexcept {
-    if (tris_.empty()) {
+    if (tris.empty()) {
         out_min = {};
         out_max = {};
         return;
     }
-    out_min = tris_[0].a;
-    out_max = tris_[0].a;
-    auto grow = [&](Vec3 p) {
-        out_min.x = std::min(out_min.x, p.x);
-        out_min.y = std::min(out_min.y, p.y);
-        out_min.z = std::min(out_min.z, p.z);
-        out_max.x = std::max(out_max.x, p.x);
-        out_max.y = std::max(out_max.y, p.y);
-        out_max.z = std::max(out_max.z, p.z);
+    out_min = tris[0].a;
+    out_max = tris[0].a;
+    auto grow = [&](Vec3 point) {
+        out_min.pos_x = std::min(out_min.pos_x, point.pos_x);
+        out_min.pos_y = std::min(out_min.pos_y, point.pos_y);
+        out_min.pos_z = std::min(out_min.pos_z, point.pos_z);
+        out_max.pos_x = std::max(out_max.pos_x, point.pos_x);
+        out_max.pos_y = std::max(out_max.pos_y, point.pos_y);
+        out_max.pos_z = std::max(out_max.pos_z, point.pos_z);
     };
-    for (const Triangle& t : tris_) {
-        grow(t.a);
-        grow(t.b);
-        grow(t.c);
+    for (const Triangle& tri : tris) {
+        grow(tri.a);
+        grow(tri.b);
+        grow(tri.c);
     }
 }
 

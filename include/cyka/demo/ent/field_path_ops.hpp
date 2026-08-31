@@ -3,11 +3,10 @@
 #include "cyka/demo/ent/field_path.hpp"
 
 #include <array>
-#include <cstdint>
 
 namespace cyka::demo::ent {
 
-inline constexpr std::size_t kFieldPathOpCount = 40;
+inline constexpr std::size_t FIELD_PATH_OP_COUNT = 40;
 
 struct FieldPathOp {
     int weight{0};
@@ -15,6 +14,6 @@ struct FieldPathOp {
 };
 
 /// Order matches demoinfocs' fieldPathTable; the weights build the huffman code.
-extern const std::array<FieldPathOp, kFieldPathOpCount> kFieldPathOps;
+extern const std::array<FieldPathOp, FIELD_PATH_OP_COUNT> FIELD_PATH_OPS;
 
 } // namespace cyka::demo::ent

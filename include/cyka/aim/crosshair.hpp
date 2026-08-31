@@ -6,6 +6,6 @@
 
 namespace cyka::aim {
 
-void crosshair_enrich(const VisibilityBatch& vis, Match& match, const Samples& samples);
+void crosshairEnrich(const VisibilityBatch& vis, Match& match, const Samples& samples);
 
 } // namespace cyka::aim

@@ -3,142 +3,148 @@
 
 #include "cyka/demo/ent/quantized_float.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
 namespace cyka::demo::ent {
 namespace {
 
-void validate_flags(QuantizedFloat& q) {
-    if (q.flags == 0) {
+inline constexpr std::uint32_t FLOAT_BITS = 32U;
+inline constexpr std::int32_t FLOAT_BIT_COUNT = 32;
+inline constexpr std::uint32_t HIGH_BIT_MASK = 0xFFFFFFFEU;
+
+void validateFlags(QuantizedFloat& quant) {
+    if (quant.flags == 0) {
         return;
     }
-    if ((q.low == 0.0F && (q.flags & kQffRoundDown) != 0) ||
-        (q.high == 0.0F && (q.flags & kQffRoundUp) != 0)) {
-        q.flags &= ~kQffEncodeZero;
+    if ((quant.low == 0.0F && (quant.flags & QFF_ROUND_DOWN) != 0) ||
+        (quant.high == 0.0F && (quant.flags & QFF_ROUND_UP) != 0)) {
+        quant.flags &= ~QFF_ENCODE_ZERO;
     }
-    if (q.low == 0.0F && (q.flags & kQffEncodeZero) != 0) {
-        q.flags |= kQffRoundDown;
-        q.flags &= ~kQffEncodeZero;
+    if (quant.low == 0.0F && (quant.flags & QFF_ENCODE_ZERO) != 0) {
+        quant.flags |= QFF_ROUND_DOWN;
+        quant.flags &= ~QFF_ENCODE_ZERO;
     }
-    if (q.high == 0.0F && (q.flags & kQffEncodeZero) != 0) {
-        q.flags |= kQffRoundUp;
-        q.flags &= ~kQffEncodeZero;
+    if (quant.high == 0.0F && (quant.flags & QFF_ENCODE_ZERO) != 0) {
+        quant.flags |= QFF_ROUND_UP;
+        quant.flags &= ~QFF_ENCODE_ZERO;
     }
-    if (q.low > 0.0F || q.high < 0.0F) {
-        q.flags &= ~kQffEncodeZero;
+    if (quant.low > 0.0F || quant.high < 0.0F) {
+        quant.flags &= ~QFF_ENCODE_ZERO;
     }
-    if ((q.flags & kQffEncodeIntegers) != 0) {
-        q.flags &= ~(kQffRoundUp | kQffRoundDown | kQffEncodeZero);
+    if ((quant.flags & QFF_ENCODE_INTEGERS) != 0) {
+        quant.flags &= ~(QFF_ROUND_UP | QFF_ROUND_DOWN | QFF_ENCODE_ZERO);
     }
-    if ((q.flags & (kQffRoundDown | kQffRoundUp)) == (kQffRoundDown | kQffRoundUp)) {
+    if ((quant.flags & (QFF_ROUND_DOWN | QFF_ROUND_UP)) == (QFF_ROUND_DOWN | QFF_ROUND_UP)) {
         // Mutually exclusive in Valve's encoder; drop both rather than abort.
-        q.flags &= ~(kQffRoundDown | kQffRoundUp);
+        quant.flags &= ~(QFF_ROUND_DOWN | QFF_ROUND_UP);
     }
 }
 
-void assign_multipliers(QuantizedFloat& q, std::uint32_t steps) {
-    static constexpr std::array<float, 5> kMultipliers{0.9999F, 0.99F, 0.9F, 0.8F, 0.7F};
-    q.high_low_mul = 0.0F;
-    const float range = q.high - q.low;
-    const std::uint32_t high = q.bit_count == 32 ? 0xFFFFFFFEU : ((1U << q.bit_count) - 1U);
-    float high_mul = std::abs(range) <= 0.0F ? static_cast<float>(high)
-                                             : static_cast<float>(high) / range;
-    if (high_mul * range > static_cast<float>(high)) {
-        for (const float mult : kMultipliers) {
-            high_mul = static_cast<float>(high) / range * mult;
-            if (high_mul * range > static_cast<float>(high)) {
+void assignMultipliers(QuantizedFloat& quant, std::uint32_t steps) {
+    static constexpr std::array<float, 5> MULTIPLIERS{0.9999F, 0.99F, 0.9F, 0.8F, 0.7F};
+    quant.high_low_mul = 0.0F;
+    const float RANGE = quant.high - quant.low;
+    const std::uint32_t HIGH =
+        quant.bit_count == FLOAT_BITS ? HIGH_BIT_MASK : ((1U << quant.bit_count) - 1U);
+    float high_mul =
+        std::abs(RANGE) <= 0.0F ? static_cast<float>(HIGH) : static_cast<float>(HIGH) / RANGE;
+    if (high_mul * RANGE > static_cast<float>(HIGH)) {
+        for (const float MULT : MULTIPLIERS) {
+            high_mul = static_cast<float>(HIGH) / RANGE * MULT;
+            if (high_mul * RANGE > static_cast<float>(HIGH)) {
                 continue;
             }
             break;
         }
     }
-    q.high_low_mul = high_mul;
-    q.dec_mul = steps > 1 ? 1.0F / static_cast<float>(steps - 1) : 0.0F;
+    quant.high_low_mul = high_mul;
+    quant.dec_mul = steps > 1 ? 1.0F / static_cast<float>(steps - 1) : 0.0F;
 }
 
-float quantize(const QuantizedFloat& q, float val) {
-    if (val < q.low) {
-        return q.low;
+float quantize(const QuantizedFloat& quant, float val) {
+    if (val < quant.low) {
+        return quant.low;
     }
-    if (val > q.high) {
-        return q.high;
+    if (val > quant.high) {
+        return quant.high;
     }
-    const auto i = static_cast<std::uint32_t>((val - q.low) * q.high_low_mul);
-    return q.low + (q.high - q.low) * (static_cast<float>(i) * q.dec_mul);
+    const auto IDX = static_cast<std::uint32_t>((val - quant.low) * quant.high_low_mul);
+    return quant.low + ((quant.high - quant.low) * (static_cast<float>(IDX) * quant.dec_mul));
 }
 
 } // namespace
 
-float QuantizedFloat::decode(BitStream& r) const noexcept {
-    if ((flags & kQffRoundDown) != 0 && r.read_bool()) {
+float QuantizedFloat::decode(BitStream& reader) const noexcept {
+    if ((flags & QFF_ROUND_DOWN) != 0 && reader.readBool()) {
         return low;
     }
-    if ((flags & kQffRoundUp) != 0 && r.read_bool()) {
+    if ((flags & QFF_ROUND_UP) != 0 && reader.readBool()) {
         return high;
     }
-    if ((flags & kQffEncodeZero) != 0 && r.read_bool()) {
+    if ((flags & QFF_ENCODE_ZERO) != 0 && reader.readBool()) {
         return 0.0F;
     }
-    return low + (high - low) * static_cast<float>(r.read_bits(bit_count)) * dec_mul;
+    return low + ((high - low) * static_cast<float>(reader.readBits(bit_count)) * dec_mul);
 }
 
-QuantizedFloat make_quantized_float(std::int32_t bit_count, std::optional<std::int32_t> flags,
-                                    std::optional<float> low_value,
-                                    std::optional<float> high_value) {
-    QuantizedFloat q;
-    if (bit_count == 0 || bit_count >= 32) {
-        q.no_scale = true;
-        q.bit_count = 32;
-        return q;
+QuantizedFloat makeQuantizedFloat(
+    std::int32_t bit_count,
+    std::optional<std::int32_t> flags,
+    std::optional<float> low_value,
+    std::optional<float> high_value) {
+    QuantizedFloat quant;
+    if (bit_count <= 0 || bit_count >= FLOAT_BIT_COUNT) {
+        quant.no_scale = true;
+        quant.bit_count = FLOAT_BITS;
+        return quant;
     }
-    q.bit_count = static_cast<std::uint32_t>(bit_count);
-    q.low = low_value.value_or(0.0F);
-    q.high = high_value.value_or(1.0F);
-    q.flags = flags.has_value() ? static_cast<std::uint32_t>(*flags) : 0U;
+    quant.bit_count = static_cast<std::uint32_t>(bit_count);
+    quant.low = low_value.value_or(0.0F);
+    quant.high = high_value.value_or(1.0F);
+    quant.flags = flags.has_value() ? static_cast<std::uint32_t>(*flags) : 0U;
 
-    validate_flags(q);
+    validateFlags(quant);
 
-    std::uint32_t steps = 1U << q.bit_count;
-    if ((q.flags & kQffRoundDown) != 0) {
-        q.offset = (q.high - q.low) / static_cast<float>(steps);
-        q.high -= q.offset;
-    } else if ((q.flags & kQffRoundUp) != 0) {
-        q.offset = (q.high - q.low) / static_cast<float>(steps);
-        q.low += q.offset;
+    std::uint32_t steps = 1U << quant.bit_count;
+    if ((quant.flags & QFF_ROUND_DOWN) != 0) {
+        quant.offset = (quant.high - quant.low) / static_cast<float>(steps);
+        quant.high -= quant.offset;
+    } else if ((quant.flags & QFF_ROUND_UP) != 0) {
+        quant.offset = (quant.high - quant.low) / static_cast<float>(steps);
+        quant.low += quant.offset;
     }
 
-    if ((q.flags & kQffEncodeIntegers) != 0) {
-        float delta = q.high - q.low;
-        if (delta < 1.0F) {
-            delta = 1.0F;
+    if ((quant.flags & QFF_ENCODE_INTEGERS) != 0) {
+        float delta = quant.high - quant.low;
+        delta = std::max(delta, 1.0F);
+        const auto DELTA_LOG2 = std::ceil(std::log2(static_cast<double>(delta)));
+        const auto RANGE2 = static_cast<std::uint32_t>(1ULL << static_cast<unsigned>(DELTA_LOG2));
+        std::uint32_t bit_count_adj = quant.bit_count;
+        while (bit_count_adj < FLOAT_BITS && (1U << bit_count_adj) <= RANGE2) {
+            ++bit_count_adj;
         }
-        const auto delta_log2 = std::ceil(std::log2(static_cast<double>(delta)));
-        const auto range2 = static_cast<std::uint32_t>(1ULL << static_cast<unsigned>(delta_log2));
-        std::uint32_t bc = q.bit_count;
-        while (bc < 32 && (1U << bc) <= range2) {
-            ++bc;
+        if (bit_count_adj > quant.bit_count) {
+            quant.bit_count = bit_count_adj;
+            steps = 1U << quant.bit_count;
         }
-        if (bc > q.bit_count) {
-            q.bit_count = bc;
-            steps = 1U << q.bit_count;
-        }
-        q.offset = static_cast<float>(range2) / static_cast<float>(steps);
-        q.high = q.low + static_cast<float>(range2) - q.offset;
+        quant.offset = static_cast<float>(RANGE2) / static_cast<float>(steps);
+        quant.high = quant.low + static_cast<float>(RANGE2) - quant.offset;
     }
 
-    assign_multipliers(q, steps);
+    assignMultipliers(quant, steps);
 
-    if ((q.flags & kQffRoundDown) != 0 && quantize(q, q.low) == q.low) {
-        q.flags &= ~kQffRoundDown;
+    if ((quant.flags & QFF_ROUND_DOWN) != 0 && quantize(quant, quant.low) == quant.low) {
+        quant.flags &= ~QFF_ROUND_DOWN;
     }
-    if ((q.flags & kQffRoundUp) != 0 && quantize(q, q.high) == q.high) {
-        q.flags &= ~kQffRoundUp;
+    if ((quant.flags & QFF_ROUND_UP) != 0 && quantize(quant, quant.high) == quant.high) {
+        quant.flags &= ~QFF_ROUND_UP;
     }
-    if ((q.flags & kQffEncodeZero) != 0 && quantize(q, 0.0F) == 0.0F) {
-        q.flags &= ~kQffEncodeZero;
+    if ((quant.flags & QFF_ENCODE_ZERO) != 0 && quantize(quant, 0.0F) == 0.0F) {
+        quant.flags &= ~QFF_ENCODE_ZERO;
     }
-    return q;
+    return quant;
 }
 
 } // namespace cyka::demo::ent

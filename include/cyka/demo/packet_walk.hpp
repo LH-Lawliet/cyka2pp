@@ -17,13 +17,14 @@ struct NetMessage {
 };
 
 /// Walk CDemoPacket data: UBitInt type + varint size + payload.
-void walk_packet_data(std::span<const std::uint8_t> data, EventDescMap& descs,
-                      const std::function<void(const GameEvent&)>& on_event,
-                      const std::function<void(const NetMessage&)>& on_net = {});
+void walkPacketData(std::span<const std::uint8_t> data,
+                    EventDescMap& descs,
+                    const std::function<void(const GameEvent&)>& on_event,
+                    const std::function<void(const NetMessage&)>& on_net = {});
 
-[[nodiscard]] std::span<const std::uint8_t> packet_data_field(std::span<const std::uint8_t> body);
+[[nodiscard]] std::span<const std::uint8_t> packetDataField(std::span<const std::uint8_t> body);
 
-[[nodiscard]] std::span<const std::uint8_t>
-full_packet_data_field(std::span<const std::uint8_t> body, std::vector<std::uint8_t>& scratch);
+[[nodiscard]] std::span<const std::uint8_t> fullPacketDataField(
+    std::span<const std::uint8_t> body, std::vector<std::uint8_t>& scratch);
 
 } // namespace cyka::demo

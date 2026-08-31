@@ -5,8 +5,8 @@
 namespace cyka::csdata {
 
 struct SprayPoint {
-    double x;
-    double y;
+    double delta_x{0};
+    double delta_y{0};
 };
 
 struct SpraySpan {
@@ -14,6 +14,6 @@ struct SpraySpan {
     std::size_t size{0};
 };
 
-[[nodiscard]] SpraySpan spray_pattern(std::string_view weapon, bool scoped, bool silenced);
+[[nodiscard]] SpraySpan sprayPattern(std::string_view weapon, bool scoped, bool silenced);
 
 } // namespace cyka::csdata

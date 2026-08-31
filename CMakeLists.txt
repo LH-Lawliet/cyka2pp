@@ -108,6 +108,7 @@ set(CYKA_LIB_SOURCES
     src/demo/ent/baselines.cpp
     src/demo/ent/pose_sampler.cpp
     src/demo/ent_bridge.cpp
+    src/demo/debug.cpp
     src/demo/parser.cpp
     src/demo/build_match.cpp
     src/metrics/ratings.cpp
@@ -148,6 +149,17 @@ target_link_libraries(cyka_core PUBLIC
     ${CYKA_SNAPPY_TARGET}
 )
 target_link_libraries(cyka_core PRIVATE meshoptimizer)
+
+set(CYKA_SPRAY_SOURCES
+    src/csdata/spray_base_rifles.cpp
+    src/csdata/spray_base_smg.cpp
+    src/csdata/spray_base_lmg.cpp
+    src/csdata/spray_scoped.cpp
+    src/csdata/spray_nosil.cpp
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  set_source_files_properties(${CYKA_SPRAY_SOURCES} PROPERTIES COMPILE_OPTIONS "-Wno-c23-extensions")
+endif()
 
 add_executable(cyka2pp src/main.cpp)
 target_link_libraries(cyka2pp PRIVATE cyka_core)
@@ -192,7 +204,18 @@ if(CYKA_MARCH)
 endif()
 
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
-if(CLANG_TIDY_EXE)
+find_program(RUN_CLANG_TIDY_EXE NAMES run-clang-tidy)
+if(RUN_CLANG_TIDY_EXE)
+  add_custom_target(cyka_tidy
+    COMMAND ${RUN_CLANG_TIDY_EXE}
+      -p ${CMAKE_BINARY_DIR}
+      --warnings-as-errors=*
+      "^(${CMAKE_SOURCE_DIR}/(include|src|tests)/)"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Running clang-tidy on first-party sources (warnings as errors)"
+    VERBATIM
+  )
+elseif(CLANG_TIDY_EXE)
   add_custom_target(cyka_tidy
     COMMAND ${CLANG_TIDY_EXE}
       -p ${CMAKE_BINARY_DIR}

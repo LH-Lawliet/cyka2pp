@@ -2,7 +2,6 @@
 // sendtables/sendtablescs2/entity.go (Parser.OnPacketEntities). See NOTICE.
 
 #include "cyka/demo/ent/context.hpp"
-
 #include "cyka/demo/proto_wire.hpp"
 
 #include <string_view>
@@ -12,14 +11,25 @@ namespace cyka::demo::ent {
 namespace {
 
 using cyka::demo::ByteReader;
-using cyka::demo::kWireLen;
-using cyka::demo::kWireVarint;
+using cyka::demo::WIRE_LEN;
+
+inline constexpr int PROTO_FIELD_UPDATED = 2;
+inline constexpr int PROTO_FIELD_IS_DELTA = 3;
+inline constexpr int PROTO_FIELD_ENTITY_DATA = 7;
+inline constexpr int PROTO_FIELD_PVS_BITS = 16;
+inline constexpr int MAX_ENTITY_INDEX = 0x3FFF;
+inline constexpr unsigned CMD_BITS = 2U;
+inline constexpr std::uint32_t CMD_LEAVE_BIT = 0x01U;
+inline constexpr std::uint32_t CMD_DELETE_BIT = 0x02U;
+inline constexpr unsigned ENTITY_SERIAL_BITS = 17U;
+inline constexpr unsigned PVS_CMD_BITS = 2U;
+inline constexpr std::uint32_t PVS_SKIP_BIT = 0x01U;
 
 /// Classes whose field values we retain; everything else is decode-and-drop.
-bool is_tracked_class(std::string_view name) {
-    static const std::unordered_set<std::string_view> kTracked{
+bool isTrackedClass(std::string_view name) {
+    static const std::unordered_set<std::string_view> TRACKED{
         "CCSPlayerController", "CCSPlayerPawn", "CCSGameRulesProxy"};
-    return kTracked.contains(name);
+    return TRACKED.contains(name);
 }
 
 struct PacketHeader {
@@ -29,131 +39,130 @@ struct PacketHeader {
     std::uint32_t pvs_vis_bits{0};
 };
 
-PacketHeader read_header(std::span<const std::uint8_t> msg) {
-    PacketHeader h;
-    ByteReader r(msg);
-    while (auto f = cyka::demo::read_field(r)) {
-        switch (f->field) {
-        case 2:
-            h.updated_entries = static_cast<int>(f->varint);
+PacketHeader readHeader(std::span<const std::uint8_t> msg) {
+    PacketHeader header;
+    ByteReader reader(msg);
+    while (auto field = cyka::demo::readField(reader)) {
+        switch (field->field) {
+        case PROTO_FIELD_UPDATED:
+            header.updated_entries = static_cast<int>(field->varint);
             break;
-        case 3:
-            h.is_delta = f->varint != 0;
+        case PROTO_FIELD_IS_DELTA:
+            header.is_delta = field->varint != 0;
             break;
-        case 7:
-            if (f->wire == kWireLen) {
-                h.entity_data = f->bytes;
+        case PROTO_FIELD_ENTITY_DATA:
+            if (field->wire == WIRE_LEN) {
+                header.entity_data = field->bytes;
             }
             break;
-        case 16:
-            h.pvs_vis_bits = static_cast<std::uint32_t>(f->varint);
+        case PROTO_FIELD_PVS_BITS:
+            header.pvs_vis_bits = static_cast<std::uint32_t>(field->varint);
             break;
         default:
             break;
         }
     }
-    return h;
+    return header;
 }
 
 } // namespace
 
 Entity* EntityContext::find(std::int32_t index) const {
-    const auto it = entities_.find(index);
-    return it == entities_.end() ? nullptr : it->second.get();
+    const auto ITER = entities.find(index);
+    return ITER == entities.end() ? nullptr : ITER->second.get();
 }
 
-Entity* EntityContext::find_by_handle(std::uint64_t handle) const {
-    if (handle == kInvalidHandle) {
+Entity* EntityContext::findByHandle(std::uint64_t handle) const {
+    if (handle == INVALID_HANDLE) {
         return nullptr;
     }
-    auto* e = find(static_cast<std::int32_t>(handle & kHandleIndexMask));
-    if (e == nullptr || static_cast<std::uint64_t>(e->serial()) != (handle >> kMaxEdictBits)) {
+    auto* ent = find(static_cast<std::int32_t>(handle & HANDLE_INDEX_MASK));
+    if (ent == nullptr || static_cast<std::uint64_t>(ent->serial()) != (handle >> MAX_EDICT_BITS)) {
         return nullptr;
     }
-    return e;
+    return ent;
 }
 
-void EntityContext::set_baseline(std::int32_t class_id, std::vector<std::uint8_t> data) {
-    baselines_[class_id] = std::move(data);
+void EntityContext::setBaseline(std::int32_t class_id, std::vector<std::uint8_t> data) {
+    baselines[class_id] = std::move(data);
 }
 
-bool EntityContext::on_packet_entities(std::span<const std::uint8_t> msg) {
+bool EntityContext::onPacketEntities(std::span<const std::uint8_t> msg) {
     if (!ready()) {
         return true;
     }
-    const PacketHeader h = read_header(msg);
-    if (h.entity_data.empty() || h.updated_entries <= 0) {
+    const PacketHeader HEADER = readHeader(msg);
+    if (HEADER.entity_data.empty() || HEADER.updated_entries <= 0) {
         return true;
     }
-    if (!h.is_delta) {
-        if (full_packets_ > 0) {
+    if (!HEADER.is_delta) {
+        if (full_packets > 0) {
             return true; // demoinfocs: only the first full frame seeds state
         }
-        ++full_packets_;
+        ++full_packets;
     }
 
-    BitStream r(h.entity_data);
+    BitStream reader(HEADER.entity_data);
     std::int32_t index = -1;
 
-    for (int remaining = h.updated_entries; remaining > 0; --remaining) {
-        index += static_cast<std::int32_t>(r.read_ubit_var()) + 1;
-        if (r.failed() || index < 0 || index > 0x3FFF) {
-            ++failures_;
+    for (int remaining = HEADER.updated_entries; remaining > 0; --remaining) {
+        index += static_cast<std::int32_t>(reader.readUbitVar()) + 1;
+        if (reader.failed() || index < 0 || index > MAX_ENTITY_INDEX) {
+            ++decode_failures;
             return false;
         }
-        const std::uint32_t cmd = r.read_bits(2);
+        const std::uint32_t CMD = reader.readBits(CMD_BITS);
 
-        if ((cmd & 0x01U) != 0) {
-            auto* e = find(index);
-            if (e == nullptr || !e->active()) {
+        if ((CMD & CMD_LEAVE_BIT) != 0) {
+            auto* ent = find(index);
+            if (ent == nullptr || !ent->active()) {
                 continue;
             }
-            // Leaving PVS alone keeps the entity alive (demoinfocs EntityOpLeft);
-            // only an explicit delete retires it.
-            if ((cmd & 0x02U) != 0) {
-                e->set_active(false);
-                tracked_dirty_ = true;
+            if ((CMD & CMD_DELETE_BIT) != 0) {
+                ent->setActive(false);
+                tracked_dirty = true;
             }
             continue;
         }
 
-        if ((cmd & 0x02U) != 0) {
-            const auto class_id = static_cast<std::int32_t>(r.read_bits(class_id_bits_));
-            const auto serial = static_cast<std::int32_t>(r.read_bits(17));
-            (void)r.read_var_u32(); // unused "creation tick" style field
-            const auto ci = classes_by_id_.find(class_id);
-            if (ci == classes_by_id_.end() || ci->second->serializer == nullptr) {
-                ++failures_;
+        if ((CMD & CMD_DELETE_BIT) != 0) {
+            const auto CLASS_ID = static_cast<std::int32_t>(reader.readBits(class_id_bits));
+            const auto SERIAL = static_cast<std::int32_t>(reader.readBits(ENTITY_SERIAL_BITS));
+            (void)reader.readVarU32();
+            const auto CLASS_ITER = classes_by_id.find(CLASS_ID);
+            if (CLASS_ITER == classes_by_id.end() || CLASS_ITER->second->serializer == nullptr) {
+                ++decode_failures;
                 return false;
             }
-            auto owned = std::make_unique<Entity>(index, serial, ci->second);
-            Entity* e = owned.get();
-            e->set_tracked(is_tracked_class(ci->second->name));
-            entities_[index] = std::move(owned);
-            tracked_dirty_ = true;
+            auto owned = std::make_unique<Entity>(
+                EntitySpawn{.index = index, .serial = SERIAL, .cls = CLASS_ITER->second});
+            Entity* ent = owned.get();
+            ent->setTracked(isTrackedClass(CLASS_ITER->second->name));
+            entities[index] = std::move(owned);
+            tracked_dirty = true;
 
-            if (const auto bl = baselines_.find(class_id); bl != baselines_.end()) {
-                BitStream br(bl->second);
-                (void)e->read_fields(br, path_scratch_);
+            if (const auto BASELINE = baselines.find(CLASS_ID); BASELINE != baselines.end()) {
+                BitStream baseline_reader(BASELINE->second);
+                (void)ent->readFields(baseline_reader, path_scratch);
             }
-            if (!e->read_fields(r, path_scratch_)) {
-                ++failures_;
+            if (!ent->readFields(reader, path_scratch)) {
+                ++decode_failures;
                 return false;
             }
             continue;
         }
 
-        if (h.pvs_vis_bits > 0 && (r.read_bits(2) & 0x01U) != 0) {
+        if (HEADER.pvs_vis_bits > 0 && (reader.readBits(PVS_CMD_BITS) & PVS_SKIP_BIT) != 0) {
             continue;
         }
-        auto* e = find(index);
-        if (e == nullptr) {
-            ++failures_;
+        auto* ent = find(index);
+        if (ent == nullptr) {
+            ++decode_failures;
             return false;
         }
-        e->set_active(true);
-        if (!e->read_fields(r, path_scratch_)) {
-            ++failures_;
+        ent->setActive(true);
+        if (!ent->readFields(reader, path_scratch)) {
+            ++decode_failures;
             return false;
         }
     }
@@ -162,16 +171,16 @@ bool EntityContext::on_packet_entities(std::span<const std::uint8_t> msg) {
 }
 
 const std::vector<Entity*>& EntityContext::tracked() const {
-    if (tracked_dirty_) {
-        tracked_.clear();
-        for (const auto& [idx, e] : entities_) {
-            if (e->tracked()) {
-                tracked_.push_back(e.get());
+    if (tracked_dirty) {
+        tracked_ents.clear();
+        for (const auto& [idx, ent_ptr] : entities) {
+            if (ent_ptr->tracked()) {
+                tracked_ents.push_back(ent_ptr.get());
             }
         }
-        tracked_dirty_ = false;
+        tracked_dirty = false;
     }
-    return tracked_;
+    return tracked_ents;
 }
 
 } // namespace cyka::demo::ent

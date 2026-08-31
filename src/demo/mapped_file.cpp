@@ -1,62 +1,86 @@
 #include "cyka/demo/mapped_file.hpp"
 
+#include <cstdio>
 #include <fcntl.h>
+#include <memory>
+#include <utility>
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <utility>
-
 namespace cyka::demo {
+namespace {
 
-MappedFile::MappedFile(MappedFile&& o) noexcept
-    : data_(std::exchange(o.data_, nullptr)), size_(std::exchange(o.size_, 0)),
-      fd_(std::exchange(o.fd_, -1)) {}
+[[nodiscard]] int openReadOnly(const std::filesystem::path& path) {
+    // Prefer fopen+fcntl over open/openat/syscall: those are vararg APIs.
+    const std::unique_ptr<std::FILE, decltype(&std::fclose)> STREAM(
+        std::fopen(path.c_str(), "rbe"), &std::fclose);
+    if (STREAM == nullptr) {
+        return -1;
+    }
+    const int ORIG_FD = ::fileno(STREAM.get());
+    if (ORIG_FD < 0) {
+        return -1;
+    }
+    return ::fcntl(ORIG_FD, F_DUPFD_CLOEXEC, 0);
+}
 
-MappedFile& MappedFile::operator=(MappedFile&& o) noexcept {
-    if (this != &o) {
+} // namespace
+
+MappedFile::MappedFile(MappedFile&& other) noexcept
+    : mapped_ptr(std::exchange(other.mapped_ptr, nullptr)),
+      byte_count(std::exchange(other.byte_count, 0)),
+      file_desc(std::exchange(other.file_desc, -1)) {}
+
+MappedFile& MappedFile::operator=(MappedFile&& other) noexcept {
+    if (this != &other) {
         this->~MappedFile();
-        data_ = std::exchange(o.data_, nullptr);
-        size_ = std::exchange(o.size_, 0);
-        fd_ = std::exchange(o.fd_, -1);
+        mapped_ptr = std::exchange(other.mapped_ptr, nullptr);
+        byte_count = std::exchange(other.byte_count, 0);
+        file_desc = std::exchange(other.file_desc, -1);
     }
     return *this;
 }
 
 MappedFile::~MappedFile() {
-    if (data_ != nullptr && data_ != MAP_FAILED) {
-        ::munmap(data_, size_);
+    if (mapped_ptr != nullptr && mapped_ptr != MAP_FAILED) {
+        ::munmap(mapped_ptr, byte_count);
     }
-    if (fd_ >= 0) {
-        ::close(fd_);
+    if (file_desc >= 0) {
+        ::close(file_desc);
     }
 }
 
-Result<MappedFile> map_file(const std::filesystem::path& path) {
-    const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return std::unexpected(Error::NotFound);
+Result<MappedFile> mapFile(const std::filesystem::path& path) {
+    const int FILE_DESC = openReadOnly(path);
+    if (FILE_DESC < 0) {
+        return std::unexpected(Error::NOT_FOUND);
     }
-    struct stat st {};
-    if (::fstat(fd, &st) != 0 || st.st_size < 0) {
-        ::close(fd);
-        return std::unexpected(Error::Io);
+
+    struct stat stat_buf{};
+    if (::fstat(FILE_DESC, &stat_buf) != 0 || stat_buf.st_size < 0) {
+        ::close(FILE_DESC);
+        return std::unexpected(Error::IO);
     }
-    const auto size = static_cast<std::size_t>(st.st_size);
-    if (size == 0) {
+
+    const auto BYTE_COUNT = static_cast<std::size_t>(stat_buf.st_size);
+    if (BYTE_COUNT == 0) {
         MappedFile out;
-        out.fd_ = fd;
+        out.file_desc = FILE_DESC;
         return out;
     }
-    void* p = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (p == MAP_FAILED) {
-        ::close(fd);
-        return std::unexpected(Error::Io);
+
+    void* ptr = ::mmap(nullptr, BYTE_COUNT, PROT_READ, MAP_PRIVATE, FILE_DESC, 0);
+    if (ptr == MAP_FAILED) {
+        ::close(FILE_DESC);
+        return std::unexpected(Error::IO);
     }
+
     MappedFile out;
-    out.data_ = static_cast<std::uint8_t*>(p);
-    out.size_ = size;
-    out.fd_ = fd;
+    out.mapped_ptr = static_cast<std::uint8_t*>(ptr);
+    out.byte_count = BYTE_COUNT;
+    out.file_desc = FILE_DESC;
     return out;
 }
 

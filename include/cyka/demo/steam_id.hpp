@@ -1,53 +1,55 @@
 #pragma once
 
-#include "cyka/types.hpp"
-
 #include <cstdint>
 #include <string_view>
 
 namespace cyka::demo {
 
 /// Individual SteamID64 range (universe=1, type=1, instance=1).
-inline constexpr std::uint64_t kSteamId64Min = 76'561'197'960'265'728ULL;
-inline constexpr std::uint64_t kSteamId64Max = kSteamId64Min + 0xFFFF'FFFFULL;
+inline constexpr std::uint64_t STEAM_ID64_MIN = 76'561'197'960'265'728ULL;
+inline constexpr std::uint64_t STEAM_ID64_MAX = STEAM_ID64_MIN + 0xFFFF'FFFFULL;
+inline constexpr std::size_t STEAM_ID64_STR_MAX = 20;
+inline constexpr int DECIMAL_RADIX = 10;
+inline constexpr std::size_t PLAYER_NAME_MAX = 128;
+inline constexpr unsigned ASCII_SPACE = 0x20U;
+inline constexpr unsigned ASCII_DEL = 0x7FU;
 
-[[nodiscard]] inline bool is_individual_steam64(std::uint64_t id) noexcept {
-    return id >= kSteamId64Min && id <= kSteamId64Max;
+[[nodiscard]] inline bool isIndividualSteam64(std::uint64_t steam_id) noexcept {
+    return steam_id >= STEAM_ID64_MIN && steam_id <= STEAM_ID64_MAX;
 }
 
-[[nodiscard]] inline bool is_individual_steam64(std::string_view s) noexcept {
-    if (s.empty() || s.size() > 20) {
+[[nodiscard]] inline bool isIndividualSteam64(std::string_view text) noexcept {
+    if (text.empty() || text.size() > STEAM_ID64_STR_MAX) {
         return false;
     }
-    std::uint64_t v = 0;
-    for (char c : s) {
-        if (c < '0' || c > '9') {
+    std::uint64_t value = 0;
+    for (const char CHR : text) {
+        if (CHR < '0' || CHR > '9') {
             return false;
         }
-        const auto d = static_cast<std::uint64_t>(c - '0');
-        if (v > (kSteamId64Max - d) / 10) {
+        const auto DIGIT = static_cast<std::uint64_t>(CHR - '0');
+        if (value > (STEAM_ID64_MAX - DIGIT) / DECIMAL_RADIX) {
             return false;
         }
-        v = v * 10 + d;
+        value = (value * DECIMAL_RADIX) + DIGIT;
     }
-    return is_individual_steam64(v);
+    return isIndividualSteam64(value);
 }
 
-/// True if `s` looks like a human-readable player name (not binary junk).
-[[nodiscard]] inline bool looks_like_player_name(std::string_view s) noexcept {
-    if (s.empty() || s.size() > 128) {
+/// True if `text` looks like a human-readable player name (not binary junk).
+[[nodiscard]] inline bool looksLikePlayerName(std::string_view text) noexcept {
+    if (text.empty() || text.size() > PLAYER_NAME_MAX) {
         return false;
     }
-    // Reject ASCII controls / NUL. High bytes are allowed (UTF-8 names).
     int printable = 0;
-    for (unsigned char c : s) {
-        if (c == 0) {
+    for (const unsigned char CHR : text) {
+        if (CHR == 0) {
             return false;
         }
-        if (c < 0x20 && c != '\t') {
+        if (CHR < ASCII_SPACE && CHR != '\t') {
             return false;
         }
-        if (c == 0x7F) {
+        if (CHR == ASCII_DEL) {
             return false;
         }
         ++printable;

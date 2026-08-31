@@ -24,6 +24,6 @@ struct EventDesc {
 using EventDescMap = std::unordered_map<int, EventDesc>;
 
 /// Parse CMsgSource1LegacyGameEventList into `out` (merges / replaces by id).
-void parse_game_event_list(std::span<const std::uint8_t> msg, EventDescMap& out);
+void parseGameEventList(std::span<const std::uint8_t> msg, EventDescMap& out);
 
 } // namespace cyka::demo

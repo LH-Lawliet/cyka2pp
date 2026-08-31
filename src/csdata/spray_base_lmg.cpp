@@ -1,67 +1,35 @@
+#include "cyka/csdata/spray_embed.hpp"
 #include "cyka/csdata/spray_tables_internal.hpp"
 
 namespace cyka::csdata::detail {
 namespace {
 
-constexpr SprayPoint k_bl_0[] = {
-    {-0.09375, -0.09375},
-    {-0.0625, -0.0625},
-    {-0.28125, -0.40625},
-    {-0.625, -0.96875},
-    {-1.125, -1.65625},
-    {-1.5625, -2.5},
-    {-1.25, -3.15625},
-    {-0.5625, -3.75},
-    {0.0, -4.03125},
-    {0.5625, -4.5},
-    {0.90625, -4.90625},
-    {1.0625, -5.34375},
-    {0.625, -5.53125},
-    {0.65625, -5.75},
-    {0.84375, -5.875},
-    {1.0, -6.0625},
-    {1.25, -6.1875},
-    {1.25, -6.25},
-    {1.15625, -6.125},
-    {0.53125, -6.1875},
-    {-0.15625, -6.0625},
-    {-0.28125, -6.03125},
-    {-0.625, -6.15625},
-    {-1.15625, -6.15625},
-    {-1.5, -5.96875},
-    {-1.6875, -5.96875},
-    {-1.25, -6.125},
-    {-0.5, -6.09375},
-    {-0.21875, -5.9375},
-    {-0.3125, -5.90625},
-};
-constexpr SprayPoint k_bl_1[] = {
-    {0.0, -0.09375},
-    {0.0, -0.1875},
-    {0.0, -0.34375},
-    {0.0, -0.90625},
-    {0.0, -1.57812},
-    {0.0, -2.0},
-    {0.0, -2.64062},
-    {0.0, -3.23438},
-    {0.0, -3.6875},
-    {0.0, -4.09375},
-    {0.0, -4.28125},
-    {0.0, -4.53125},
-    {0.0, -4.625},
-    {0.0, -4.78125},
-    {0.0, -4.78125},
-    {0.0, -4.84375},
-    {0.0, -5.03125},
-    {0.0, -5.03125},
-    {0.0, -5.15625},
-    {0.0, -5.0},
-};
+inline constexpr std::size_t SPRAY_POINTS_SHORT = 20;
+inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
+
+SpraySpan sprayM249() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+#embed "generated/bl_0.bin"
+    };
+    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+}
+
+SpraySpan sprayNegev() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bl_1.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
 } // namespace
 
-SpraySpan find_base_lmg(std::string_view w) {
-    if (w == "M249") { return {k_bl_0, 30}; }
-    if (w == "Negev") { return {k_bl_1, 20}; }
+SpraySpan findBaseLmg(std::string_view weapon) {
+    if (weapon == "M249") {
+        return sprayM249();
+    }
+    if (weapon == "Negev") {
+        return sprayNegev();
+    }
     return {};
 }
 

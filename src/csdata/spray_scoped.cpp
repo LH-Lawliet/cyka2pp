@@ -1,80 +1,33 @@
+#include "cyka/csdata/spray_embed.hpp"
 #include "cyka/csdata/spray_tables_internal.hpp"
 
 namespace cyka::csdata::detail {
 namespace {
 
-constexpr SprayPoint k_scoped_0[] = {
-    {0.03125, -0.0625},
-    {0.03125, -0.03125},
-    {0.0, -0.15625},
-    {-0.03125, -0.25},
-    {-0.03125, -0.3125},
-    {0.0, -0.65625},
-    {0.0625, -1.03125},
-    {0.21875, -1.375},
-    {0.3125, -1.59375},
-    {0.375, -1.6875},
-    {0.15625, -1.8125},
-    {0.188285, -1.939854},
-    {0.25523, -1.930511},
-    {0.311018, -1.883796},
-    {-0.06834, -1.893139},
-    {-0.46875, -1.8125},
-    {-0.615063, -1.734307},
-    {-0.704324, -1.74365},
-    {-0.748954, -1.809051},
-    {-0.6875, -1.84375},
-    {-0.34375, -1.9375},
-    {-0.124128, -1.939854},
-    {-0.046025, -1.949197},
-    {0.032078, -1.939854},
-    {0.1875, -1.9375},
-    {0.53125, -1.84375},
-    {0.625, -1.84375},
-    {0.34375, -1.8125},
-    {0.244073, -1.846423},
-    {0.15625, -1.875},
-};
-constexpr SprayPoint k_scoped_1[] = {
-    {-0.03125, -0.09375},
-    {-0.09375, -0.125},
-    {-0.09375, -0.1875},
-    {-0.125, -0.34375},
-    {-0.21875, -0.59375},
-    {-0.34375, -1.0625},
-    {-0.4375, -1.5},
-    {-0.546722, -1.736642},
-    {-0.580195, -1.876788},
-    {-0.625, -1.96875},
-    {-0.714086, -2.016934},
-    {-0.781032, -2.06365},
-    {-0.814505, -2.119708},
-    {-0.875, -2.15625},
-    {-0.8125, -2.28125},
-    {-1.21875, -2.28125},
-    {-1.3125, -2.0},
-    {-1.5, -1.875},
-    {-1.5, -1.875},
-    {-0.8125, -1.875},
-    {-0.03125, -1.78125},
-    {0.3125, -1.71875},
-    {0.34375, -1.90625},
-    {0.4375, -2.125},
-    {0.53125, -2.28125},
-    {0.78125, -2.21875},
-    {1.125, -2.0625},
-    {0.8125, -2.125},
-    {0.53125, -2.28125},
-    {0.0, -2.15625},
-};
+inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
+
+SpraySpan sprayAugScoped() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+#embed "generated/scoped_0.bin"
+    };
+    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+}
+
+SpraySpan spraySg553Scoped() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+#embed "generated/scoped_1.bin"
+    };
+    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+}
+
 } // namespace
 
-SpraySpan find_scoped(std::string_view w) {
-    if (w == "AUG") {
-        return {k_scoped_0, 30};
+SpraySpan findScoped(std::string_view weapon) {
+    if (weapon == "AUG") {
+        return sprayAugScoped();
     }
-    if (w == "SG 553") {
-        return {k_scoped_1, 30};
+    if (weapon == "SG 553") {
+        return spraySg553Scoped();
     }
     return {};
 }

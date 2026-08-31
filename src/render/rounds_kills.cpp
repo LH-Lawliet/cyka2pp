@@ -1,73 +1,78 @@
-#include "cyka/render/table.hpp"
-
 #include "cyka/render/ansi.hpp"
+#include "cyka/render/layout.hpp"
+#include "cyka/render/table.hpp"
 
 #include <iomanip>
 #include <string>
 
 namespace cyka::render {
+namespace {
 
-Result<void> write_rounds(std::ostream& out, const Match& match) {
-    out << kAnsiBold << "  Rounds" << kAnsiReset << "  " << kAnsiMuted << "("
-        << match.rounds.size() << ")" << kAnsiReset << '\n';
-    out << kAnsiCyan << kAnsiBold << "  " << std::left << std::setw(4) << "#" << std::setw(8)
-        << "Winner" << std::setw(16) << "Reason" << std::right << std::setw(6) << "A" << std::setw(6)
-        << "B" << std::setw(10) << "Start" << std::setw(10) << "End" << kAnsiReset << '\n';
-    out << kAnsiMuted << "  " << std::string(60, '-') << kAnsiReset << '\n';
+[[nodiscard]] std::string truncateField(std::string text, std::size_t max_len) {
+    if (text.size() > max_len) {
+        text.resize(max_len > static_cast<std::size_t>(TRUNC_ELLIPSIS)
+                        ? max_len - static_cast<std::size_t>(TRUNC_ELLIPSIS)
+                        : 0);
+        text += "...";
+    }
+    return text;
+}
 
-    for (const auto& rp : match.rounds) {
-        if (!rp) {
+} // namespace
+
+Result<void> writeRounds(std::ostream& out, const Match& match) {
+    out << ANSI_BOLD << "  Rounds" << ANSI_RESET << "  " << ANSI_MUTED << "(" << match.rounds.size()
+        << ")" << ANSI_RESET << '\n';
+    out << ANSI_CYAN << ANSI_BOLD << "  " << std::left << std::setw(COL_ROUND) << "#"
+        << std::setw(COL_WINNER) << "Winner" << std::setw(COL_REASON) << "Reason" << std::right
+        << std::setw(COL_TEAM) << "A" << std::setw(COL_TEAM) << "B" << std::setw(COL_TICK)
+        << "Start" << std::setw(COL_TICK) << "End" << ANSI_RESET << '\n';
+    out << ANSI_MUTED << "  " << std::string(COL_ROUND_RULE, '-') << ANSI_RESET << '\n';
+
+    for (const auto& round_ptr : match.rounds) {
+        if (!round_ptr) {
             continue;
         }
-        std::string reason = rp->end_reason;
-        if (reason.size() > 16) {
-            reason.resize(13);
-            reason += "...";
-        }
-        std::string winner = rp->winner.empty() ? "—" : rp->winner;
-        out << "  " << std::left << std::setw(4) << rp->number << std::setw(8) << winner
-            << std::setw(16) << reason << std::right << std::setw(6) << rp->team_a_score
-            << std::setw(6) << rp->team_b_score << std::setw(10) << rp->start_tick << std::setw(10)
-            << rp->end_tick << '\n';
+        const std::string REASON = truncateField(round_ptr->end_reason, COL_REASON);
+        const std::string WINNER = round_ptr->winner.empty() ? "—" : round_ptr->winner;
+        out << "  " << std::left << std::setw(COL_ROUND) << round_ptr->number
+            << std::setw(COL_WINNER) << WINNER << std::setw(COL_REASON) << REASON << std::right
+            << std::setw(COL_TEAM) << round_ptr->team_a_score << std::setw(COL_TEAM)
+            << round_ptr->team_b_score << std::setw(COL_TICK) << round_ptr->start_tick
+            << std::setw(COL_TICK) << round_ptr->end_tick << '\n';
     }
     if (match.rounds.empty()) {
-        out << kAnsiMuted << "  (none)" << kAnsiReset << '\n';
+        out << ANSI_MUTED << "  (none)" << ANSI_RESET << '\n';
     }
     if (!out) {
-        return std::unexpected(Error::Io);
+        return std::unexpected(Error::IO);
     }
     return {};
 }
 
-Result<void> write_kills(std::ostream& out, const Match& match) {
-    out << kAnsiBold << "  Kills" << kAnsiReset << "  " << kAnsiMuted << "(" << match.kills.size()
-        << ")" << kAnsiReset << '\n';
-    out << kAnsiCyan << kAnsiBold << "  " << std::left << std::setw(4) << "R" << std::setw(10)
-        << "Tick" << std::setw(16) << "Killer" << std::setw(16) << "Victim" << std::setw(14)
-        << "Weapon" << "  Tags" << kAnsiReset << '\n';
-    out << kAnsiMuted << "  " << std::string(72, '-') << kAnsiReset << '\n';
+Result<void> writeKills(std::ostream& out, const Match& match) {
+    out << ANSI_BOLD << "  Kills" << ANSI_RESET << "  " << ANSI_MUTED << "(" << match.kills.size()
+        << ")" << ANSI_RESET << '\n';
+    out << ANSI_CYAN << ANSI_BOLD << "  " << std::left << std::setw(COL_ROUND) << "R"
+        << std::setw(COL_TICK) << "Tick" << std::setw(COL_NAME) << "Killer" << std::setw(COL_NAME)
+        << "Victim" << std::setw(COL_WEAPON) << "Weapon" << "  Tags" << ANSI_RESET << '\n';
+    out << ANSI_MUTED << "  " << std::string(COL_KILL_RULE, '-') << ANSI_RESET << '\n';
 
-    for (const auto& kp : match.kills) {
-        if (!kp) {
+    for (const auto& kill_ptr : match.kills) {
+        if (!kill_ptr) {
             continue;
         }
-        auto trunc = [](std::string s, std::size_t n) {
-            if (s.size() > n) {
-                s.resize(n > 3 ? n - 3 : 0);
-                s += "...";
-            }
-            return s;
-        };
-        out << "  " << std::left << std::setw(4) << kp->round_number << std::setw(10) << kp->tick
-            << std::setw(16) << trunc(kp->killer_name, 16) << std::setw(16)
-            << trunc(kp->victim_name, 16) << std::setw(14) << trunc(kp->weapon_name, 14) << "  "
-            << kp->tags << '\n';
+        out << "  " << std::left << std::setw(COL_ROUND) << kill_ptr->round_number
+            << std::setw(COL_TICK) << kill_ptr->tick << std::setw(COL_NAME)
+            << truncateField(kill_ptr->killer_name, COL_NAME) << std::setw(COL_NAME)
+            << truncateField(kill_ptr->victim_name, COL_NAME) << std::setw(COL_WEAPON)
+            << truncateField(kill_ptr->weapon_name, COL_WEAPON) << "  " << kill_ptr->tags << '\n';
     }
     if (match.kills.empty()) {
-        out << kAnsiMuted << "  (none)" << kAnsiReset << '\n';
+        out << ANSI_MUTED << "  (none)" << ANSI_RESET << '\n';
     }
     if (!out) {
-        return std::unexpected(Error::Io);
+        return std::unexpected(Error::IO);
     }
     return {};
 }

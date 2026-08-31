@@ -4,18 +4,18 @@
 
 namespace cyka::csdata {
 
-SpraySpan spray_pattern(std::string_view weapon, bool scoped, bool silenced) {
+SpraySpan sprayPattern(std::string_view weapon, bool scoped, bool silenced) {
     if (scoped) {
-        if (auto s = detail::find_scoped(weapon); s.data) {
-            return s;
+        if (auto span = detail::findScoped(weapon); span.data) {
+            return span;
         }
     }
     if (!silenced) {
-        if (auto s = detail::find_nosil(weapon); s.data) {
-            return s;
+        if (auto span = detail::findNosil(weapon); span.data) {
+            return span;
         }
     }
-    return detail::find_base(weapon);
+    return detail::findBase(weapon);
 }
 
 } // namespace cyka::csdata

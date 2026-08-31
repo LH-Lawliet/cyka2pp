@@ -13,201 +13,299 @@
 namespace cyka::aim {
 namespace {
 
-constexpr double kFar = 8000.0;
+constexpr double FAR = 8000.0;
+constexpr int RAY_GRID_STEP = 4;
+constexpr double DEG_HALF_CIRCLE = 180.0;
+constexpr double DEG_FULL_CIRCLE = 360.0;
+constexpr double MIN_DEPTH = 1e-6;
+constexpr double NDC_HALF = 0.5;
+constexpr double LEN_EPSILON = 1e-24;
+constexpr int PAD_MIN = 2;
+constexpr int PAD_EXTRA = 3;
 
-[[nodiscard]] double lerp_ang(double a, double b, double u) {
-    double d = b - a;
-    while (d > 180.0) {
-        d -= 360.0;
+struct AngLerp {
+    double from{0};
+    double to{0};
+    double blend{0};
+};
+
+[[nodiscard]] double lerpAng(AngLerp query) {
+    double delta = query.to - query.from;
+    while (delta > DEG_HALF_CIRCLE) {
+        delta -= DEG_FULL_CIRCLE;
     }
-    while (d < -180.0) {
-        d += 360.0;
+    while (delta < -DEG_HALF_CIRCLE) {
+        delta += DEG_FULL_CIRCLE;
     }
-    return a + d * u;
+    return query.from + (delta * query.blend);
 }
 
-[[nodiscard]] FramePose lerp_pose(const FramePose& a, const FramePose& b, double u) {
-    FramePose p = a;
-    p.pos = a.pos.add(b.pos.sub(a.pos).mul(u));
-    p.pitch = a.pitch + (b.pitch - a.pitch) * u;
-    p.yaw = lerp_ang(a.yaw, b.yaw, u);
-    p.alive = a.alive || b.alive;
-    p.duck_amount = static_cast<float>(a.duck_amount + (b.duck_amount - a.duck_amount) * u);
-    if (a.speed >= 0 && b.speed >= 0) {
-        p.speed = a.speed + (b.speed - a.speed) * u;
+[[nodiscard]] FramePose lerpPose(const FramePose& left, const FramePose& right, double blend) {
+    FramePose out = left;
+    out.pos = left.pos.add(right.pos.sub(left.pos).mul(blend));
+    out.pitch = left.pitch + ((right.pitch - left.pitch) * blend);
+    out.yaw = lerpAng({.from = left.yaw, .to = right.yaw, .blend = blend});
+    out.alive = left.alive || right.alive;
+    out.duck_amount =
+        static_cast<float>(left.duck_amount + ((right.duck_amount - left.duck_amount) * blend));
+    if (left.speed >= 0 && right.speed >= 0) {
+        out.speed = left.speed + ((right.speed - left.speed) * blend);
     }
-    return p;
+    return out;
 }
 
-[[nodiscard]] bool same_pose_geom(const FramePose& a, const FramePose& b) noexcept {
-    return a.alive == b.alive && a.pitch == b.pitch && a.yaw == b.yaw && a.pos.x == b.pos.x &&
-           a.pos.y == b.pos.y && a.pos.z == b.pos.z && a.team_letter == b.team_letter &&
-           a.duck_amount == b.duck_amount;
+[[nodiscard]] bool samePoseGeom(const FramePose& left, const FramePose& right) noexcept {
+    return left.alive == right.alive && left.pitch == right.pitch && left.yaw == right.yaw &&
+           left.pos.pos_x == right.pos.pos_x && left.pos.pos_y == right.pos.pos_y &&
+           left.pos.pos_z == right.pos.pos_z && left.team_letter == right.team_letter &&
+           left.duck_amount == right.duck_amount;
 }
 
-[[nodiscard]] bool project_point(const Vec3& eye, const ViewAxes& ax, double tan_h, double tan_v,
-                                 const Vec3& world, int w, int h, int& sx, int& sy) {
-    const double dx = world.x - eye.x;
-    const double dy = world.y - eye.y;
-    const double dz = world.z - eye.z;
-    const double z = dx * ax.fwd.x + dy * ax.fwd.y + dz * ax.fwd.z;
-    if (z <= 1e-6) {
+struct ProjectPoint {
+    const Vec3* eye{nullptr};
+    const ViewAxes* ax{nullptr};
+    double tan_h{0};
+    double tan_v{0};
+    const Vec3* world{nullptr};
+    int width{0};
+    int height{0};
+    int* screen_x{nullptr};
+    int* screen_y{nullptr};
+};
+
+[[nodiscard]] bool projectPoint(const ProjectPoint& query) {
+    if (query.eye == nullptr || query.ax == nullptr || query.world == nullptr ||
+        query.screen_x == nullptr || query.screen_y == nullptr) {
         return false;
     }
-    const double nx = (dx * ax.right.x + dy * ax.right.y + dz * ax.right.z) / (z * tan_h);
-    const double ny = (dx * ax.up.x + dy * ax.up.y + dz * ax.up.z) / (z * tan_v);
-    sx = static_cast<int>(std::floor((nx + 1.0) * 0.5 * w));
-    sy = static_cast<int>(std::floor((1.0 - ny) * 0.5 * h));
+    const double DELTA_X = query.world->pos_x - query.eye->pos_x;
+    const double DELTA_Y = query.world->pos_y - query.eye->pos_y;
+    const double DELTA_Z = query.world->pos_z - query.eye->pos_z;
+    const double DEPTH = (DELTA_X * query.ax->fwd.pos_x) + (DELTA_Y * query.ax->fwd.pos_y) +
+                         (DELTA_Z * query.ax->fwd.pos_z);
+    if (DEPTH <= MIN_DEPTH) {
+        return false;
+    }
+    const double NDC_X =
+        ((DELTA_X * query.ax->right.pos_x) + (DELTA_Y * query.ax->right.pos_y) +
+         (DELTA_Z * query.ax->right.pos_z)) /
+        (DEPTH * query.tan_h);
+    const double NDC_Y =
+        ((DELTA_X * query.ax->up.pos_x) + (DELTA_Y * query.ax->up.pos_y) +
+         (DELTA_Z * query.ax->up.pos_z)) /
+        (DEPTH * query.tan_v);
+    *query.screen_x = static_cast<int>(std::floor((NDC_X + 1.0) * NDC_HALF * query.width));
+    *query.screen_y = static_cast<int>(std::floor((1.0 - NDC_Y) * NDC_HALF * query.height));
     return true;
 }
 
-[[nodiscard]] bool ray_hits_enemy(const Vec3& eye, const ViewAxes& ax, double tan_h, double tan_v,
-                                  const WorldHitboxes& enemy_hitboxes, const geom::Mesh& mesh, int width,
-                                  int height, int px, int py) {
-    const double ndc_x = (2.0 * (px + 0.5) / width) - 1.0;
-    const double ndc_y = 1.0 - (2.0 * (py + 0.5) / height);
-    const double lx =
-        ax.fwd.x + ax.right.x * (ndc_x * tan_h) + ax.up.x * (ndc_y * tan_v);
-    const double ly =
-        ax.fwd.y + ax.right.y * (ndc_x * tan_h) + ax.up.y * (ndc_y * tan_v);
-    const double lz =
-        ax.fwd.z + ax.right.z * (ndc_x * tan_h) + ax.up.z * (ndc_y * tan_v);
-    const double len2 = lx * lx + ly * ly + lz * lz;
-    if (len2 < 1e-24) {
+struct RayHitsEnemy {
+    const Vec3* eye{nullptr};
+    const ViewAxes* ax{nullptr};
+    double tan_h{0};
+    double tan_v{0};
+    const WorldHitboxes* enemy_hitboxes{nullptr};
+    const geom::Mesh* mesh{nullptr};
+    int width{0};
+    int height{0};
+    int pix_x{0};
+    int pix_y{0};
+};
+
+[[nodiscard]] bool rayHitsEnemy(const RayHitsEnemy& query) {
+    if (query.eye == nullptr || query.ax == nullptr || query.enemy_hitboxes == nullptr ||
+        query.mesh == nullptr) {
         return false;
     }
-    const double inv = 1.0 / std::sqrt(len2);
-    const Vec3 dir{lx * inv, ly * inv, lz * inv};
-    HitboxRayHit hb;
-    if (!hitbox_ray_hit(eye, dir, kFar, enemy_hitboxes, hb)) {
+    const double NDC_X = (2.0 * (query.pix_x + NDC_HALF) / query.width) - 1.0;
+    const double NDC_Y = 1.0 - (2.0 * (query.pix_y + NDC_HALF) / query.height);
+    const double LOCAL_X = query.ax->fwd.pos_x + (query.ax->right.pos_x * (NDC_X * query.tan_h)) +
+                           (query.ax->up.pos_x * (NDC_Y * query.tan_v));
+    const double LOCAL_Y = query.ax->fwd.pos_y + (query.ax->right.pos_y * (NDC_X * query.tan_h)) +
+                           (query.ax->up.pos_y * (NDC_Y * query.tan_v));
+    const double LOCAL_Z = query.ax->fwd.pos_z + (query.ax->right.pos_z * (NDC_X * query.tan_h)) +
+                           (query.ax->up.pos_z * (NDC_Y * query.tan_v));
+    const double LEN_SQ = (LOCAL_X * LOCAL_X) + (LOCAL_Y * LOCAL_Y) + (LOCAL_Z * LOCAL_Z);
+    if (LEN_SQ < LEN_EPSILON) {
         return false;
     }
-    const Vec3 hit_pt{eye.x + dir.x * hb.t, eye.y + dir.y * hb.t, eye.z + dir.z * hb.t};
-    return !mesh.occluded(eye, hit_pt);
+    const double INV_LEN = 1.0 / std::sqrt(LEN_SQ);
+    const Vec3 RAY_DIR{
+        .pos_x = LOCAL_X * INV_LEN, .pos_y = LOCAL_Y * INV_LEN, .pos_z = LOCAL_Z * INV_LEN};
+    HitboxRayHit hitbox_hit;
+    if (!hitboxRayHit({.ray_origin = *query.eye,
+                       .ray_dir = RAY_DIR,
+                       .t_max = FAR,
+                       .hitboxes = query.enemy_hitboxes,
+                       .out = &hitbox_hit})) {
+        return false;
+    }
+    const Vec3 HIT_PT{.pos_x = query.eye->pos_x + (RAY_DIR.pos_x * hitbox_hit.t),
+                      .pos_y = query.eye->pos_y + (RAY_DIR.pos_y * hitbox_hit.t),
+                      .pos_z = query.eye->pos_z + (RAY_DIR.pos_z * hitbox_hit.t)};
+    return !query.mesh->occluded({.from = *query.eye, .to = HIT_PT});
 }
 
-[[nodiscard]] const double& tan_h_fov() {
-    static const double v = std::tan(kTtdHorzFovDeg * 0.5 * kPi / 180.0);
-    return v;
+[[nodiscard]] const double& tanHFov() {
+    static const double TAN_H = std::tan(TTD_HORZ_FOV_DEG * NDC_HALF * MATH_PI / 180.0);
+    return TAN_H;
 }
 
-[[nodiscard]] const double& tan_v_fov() {
-    static const double v = std::tan(kTtdVertFovDeg * 0.5 * kPi / 180.0);
-    return v;
+[[nodiscard]] const double& tanVFov() {
+    static const double TAN_V = std::tan(TTD_VERT_FOV_DEG * NDC_HALF * MATH_PI / 180.0);
+    return TAN_V;
 }
 
-[[nodiscard]] PosedTick index_poses(std::vector<FramePose> poses) {
+[[nodiscard]] PosedTick indexPoses(std::vector<FramePose> poses) {
     PosedTick out;
     out.poses = std::move(poses);
     out.by_id.reserve(out.poses.size());
-    for (std::size_t i = 0; i < out.poses.size(); ++i) {
-        out.by_id.emplace(out.poses[i].steam_id, i);
+    for (std::size_t idx = 0; idx < out.poses.size(); ++idx) {
+        out.by_id.emplace(out.poses[idx].steam_id, idx);
     }
     return out;
 }
 
 } // namespace
 
-std::vector<FramePose> poses_at_tick(const Samples& samples, Tick tick) {
-    return posed_at_tick(samples, tick).poses;
+std::vector<FramePose> posesAtTick(const Samples& samples, Tick tick) {
+    return posedAtTick(samples, tick).poses;
 }
 
-PosedTick posed_at_tick(const Samples& samples, Tick tick) {
+PosedTick posedAtTick(const Samples& samples, Tick tick) {
     if (samples.frames.empty()) {
         return {};
     }
     const auto& frames = samples.frames;
-    const auto it = std::upper_bound(frames.begin(), frames.end(), tick,
-                                     [](Tick t, const Frame& fr) { return t < fr.tick; });
-    if (it == frames.begin()) {
+    const auto UPPER = std::ranges::upper_bound(frames, tick, {}, &Frame::tick);
+    if (UPPER == frames.begin()) {
         return {};
     }
-    const Frame& a = *std::prev(it);
-    const Frame* b = it != frames.end() ? &(*it) : nullptr;
+    const Frame& frame_a = *std::prev(UPPER);
+    const Frame* frame_b = UPPER != frames.end() ? &(*UPPER) : nullptr;
 
     std::unordered_map<SteamId, FramePose> by_id;
-    by_id.reserve(a.poses.size() + (b != nullptr ? b->poses.size() : 0));
-    for (const auto& p : a.poses) {
-        by_id[p.steam_id] = p;
+    by_id.reserve(frame_a.poses.size() + (frame_b != nullptr ? frame_b->poses.size() : 0));
+    for (const auto& pose : frame_a.poses) {
+        by_id[pose.steam_id] = pose;
     }
-    if (b != nullptr && b->tick != a.tick) {
-        const double u =
-            static_cast<double>(tick - a.tick) / static_cast<double>(b->tick - a.tick);
-        for (const auto& pb : b->poses) {
-            auto jt = by_id.find(pb.steam_id);
-            if (jt == by_id.end()) {
-                by_id.emplace(pb.steam_id, pb);
+    if (frame_b != nullptr && frame_b->tick != frame_a.tick) {
+        const double BLEND = static_cast<double>(tick - frame_a.tick) /
+                             static_cast<double>(frame_b->tick - frame_a.tick);
+        for (const auto& next_pose : frame_b->poses) {
+            auto jter = by_id.find(next_pose.steam_id);
+            if (jter == by_id.end()) {
+                by_id.emplace(next_pose.steam_id, next_pose);
             } else {
-                jt->second = lerp_pose(jt->second, pb, u);
+                jter->second = lerpPose(jter->second, next_pose, BLEND);
             }
         }
     }
     std::vector<FramePose> out;
     out.reserve(by_id.size());
-    for (auto& [_, p] : by_id) {
-        out.push_back(std::move(p));
+    for (auto& [steam_id, pose] : by_id) {
+        (void)steam_id;
+        out.push_back(std::move(pose));
     }
-    return index_poses(std::move(out));
+    return indexPoses(std::move(out));
 }
 
-bool hitbox_visible_res(const FramePose& shooter, const FramePose& enemy, const geom::Mesh& mesh,
-                        int width, int height) {
-    if (width < 1 || height < 1 || !shooter.alive || !enemy.alive) {
+bool hitboxVisibleRes(const HitboxVisibleQuery& query) {
+    if (query.width < 1 || query.height < 1 || query.shooter == nullptr || query.enemy == nullptr ||
+        query.mesh == nullptr || !query.shooter->alive || !query.enemy->alive) {
         return false;
     }
-    const Vec3 eye = player_eye(shooter);
-    const ViewAxes ax = view_axes(shooter.pitch, shooter.yaw);
-    const double tan_h = tan_h_fov();
-    const double tan_v = tan_v_fov();
-    const WorldHitboxes enemy_hitboxes = WorldHitboxes::from_pose(enemy);
+    const Vec3 EYE = playerEye(*query.shooter);
+    const ViewAxes AXES = viewAxes({.pitch = query.shooter->pitch, .yaw = query.shooter->yaw});
+    const double TAN_H = tanHFov();
+    const double TAN_V = tanVFov();
+    const WorldHitboxes ENEMY_HITBOXES = WorldHitboxes::fromPose(*query.enemy);
 
-    int min_x = width;
+    int min_x = query.width;
     int max_x = -1;
-    int min_y = height;
+    int min_y = query.height;
     int max_y = -1;
-    for (const WorldCapsule& cap : enemy_hitboxes.caps) {
-        const Vec3 mid{(cap.a.x + cap.b.x) * 0.5, (cap.a.y + cap.b.y) * 0.5,
-                       (cap.a.z + cap.b.z) * 0.5};
-        const Vec3 pts[3] = {cap.a, cap.b, mid};
-        for (const Vec3& pt : pts) {
-            int sx = 0;
-            int sy = 0;
-            if (!project_point(eye, ax, tan_h, tan_v, pt, width, height, sx, sy)) {
-                continue;
+    for (const WorldCapsule& cap : ENEMY_HITBOXES.caps) {
+        const Vec3 MID{.pos_x = (cap.a.pos_x + cap.b.pos_x) * NDC_HALF,
+                       .pos_y = (cap.a.pos_y + cap.b.pos_y) * NDC_HALF,
+                       .pos_z = (cap.a.pos_z + cap.b.pos_z) * NDC_HALF};
+        // Unrolled (not range-for): clang-analyzer falsely flags null begin on the
+        // temporary std::array after `continue` inside a nested range-for.
+        const auto EXPAND_AT = [&](const Vec3& sample_pt) {
+            int screen_x = 0;
+            int screen_y = 0;
+            if (!projectPoint(
+                    {.eye = &EYE,
+                     .ax = &AXES,
+                     .tan_h = TAN_H,
+                     .tan_v = TAN_V,
+                     .world = &sample_pt,
+                     .width = query.width,
+                     .height = query.height,
+                     .screen_x = &screen_x,
+                     .screen_y = &screen_y})) {
+                return;
             }
-            const double z =
-                (pt.x - eye.x) * ax.fwd.x + (pt.y - eye.y) * ax.fwd.y + (pt.z - eye.z) * ax.fwd.z;
+            const double DEPTH =
+                ((sample_pt.pos_x - EYE.pos_x) * AXES.fwd.pos_x) +
+                ((sample_pt.pos_y - EYE.pos_y) * AXES.fwd.pos_y) +
+                ((sample_pt.pos_z - EYE.pos_z) * AXES.fwd.pos_z);
             // Slightly fatter than the projected capsule so we still catch grazes /
             // limb edges without casting the whole WxH grid.
-            const int pad =
-                std::max(2, static_cast<int>(std::ceil(cap.r / (z * tan_h) * width * 0.5)) + 3);
-            min_x = std::min(min_x, sx - pad);
-            max_x = std::max(max_x, sx + pad);
-            min_y = std::min(min_y, sy - pad);
-            max_y = std::max(max_y, sy + pad);
-        }
+            const int PAD = std::max(
+                PAD_MIN,
+                static_cast<int>(std::ceil(cap.r / (DEPTH * TAN_H) * query.width * NDC_HALF)) +
+                    PAD_EXTRA);
+            min_x = std::min(min_x, screen_x - PAD);
+            max_x = std::max(max_x, screen_x + PAD);
+            min_y = std::min(min_y, screen_y - PAD);
+            max_y = std::max(max_y, screen_y + PAD);
+        };
+        EXPAND_AT(cap.a);
+        EXPAND_AT(cap.b);
+        EXPAND_AT(MID);
     }
     if (max_x < 0 || max_y < 0) {
         return false;
     }
     min_x = std::max(0, min_x);
     min_y = std::max(0, min_y);
-    max_x = std::min(width - 1, max_x);
-    max_y = std::min(height - 1, max_y);
+    max_x = std::min(query.width - 1, max_x);
+    max_y = std::min(query.height - 1, max_y);
 
-    for (int py = min_y; py <= max_y; py += 4) {
-        for (int px = min_x; px <= max_x; px += 4) {
-            if (ray_hits_enemy(eye, ax, tan_h, tan_v, enemy_hitboxes, mesh, width, height, px, py)) {
+    for (int pix_y = min_y; pix_y <= max_y; pix_y += RAY_GRID_STEP) {
+        for (int pix_x = min_x; pix_x <= max_x; pix_x += RAY_GRID_STEP) {
+            if (rayHitsEnemy(
+                    {.eye = &EYE,
+                     .ax = &AXES,
+                     .tan_h = TAN_H,
+                     .tan_v = TAN_V,
+                     .enemy_hitboxes = &ENEMY_HITBOXES,
+                     .mesh = query.mesh,
+                     .width = query.width,
+                     .height = query.height,
+                     .pix_x = pix_x,
+                     .pix_y = pix_y})) {
                 return true;
             }
         }
     }
-    for (int py = min_y; py <= max_y; ++py) {
-        for (int px = min_x; px <= max_x; ++px) {
-            if ((px - min_x) % 4 == 0 && (py - min_y) % 4 == 0) {
+    for (int pix_y = min_y; pix_y <= max_y; ++pix_y) {
+        for (int pix_x = min_x; pix_x <= max_x; ++pix_x) {
+            if ((pix_x - min_x) % RAY_GRID_STEP == 0 && (pix_y - min_y) % RAY_GRID_STEP == 0) {
                 continue;
             }
-            if (ray_hits_enemy(eye, ax, tan_h, tan_v, enemy_hitboxes, mesh, width, height, px, py)) {
+            if (rayHitsEnemy(
+                    {.eye = &EYE,
+                     .ax = &AXES,
+                     .tan_h = TAN_H,
+                     .tan_v = TAN_V,
+                     .enemy_hitboxes = &ENEMY_HITBOXES,
+                     .mesh = query.mesh,
+                     .width = query.width,
+                     .height = query.height,
+                     .pix_x = pix_x,
+                     .pix_y = pix_y})) {
                 return true;
             }
         }
@@ -215,34 +313,35 @@ bool hitbox_visible_res(const FramePose& shooter, const FramePose& enemy, const 
     return false;
 }
 
-VisibilityBatch make_visibility_batch(const Samples& samples, const geom::Mesh& mesh, int width,
-                                      int height, double tickrate) {
+VisibilityBatch makeVisibilityBatch(const VisibilityBatchConfig& cfg) {
     VisibilityBatch out;
-    if (samples.frames.empty() || width < 1 || height < 1) {
+    if (cfg.samples == nullptr || cfg.mesh == nullptr || cfg.samples->frames.empty() ||
+        cfg.width < 1 || cfg.height < 1) {
         return out;
     }
-    out.samples_ = &samples;
-    out.mesh_ = &mesh;
-    out.width = width;
-    out.height = height;
-    out.tickrate = tickrate > 0 ? tickrate : 64.0;
-    out.tick_begin = samples.frames.front().tick;
-    out.tick_end = samples.frames.back().tick;
+    out.samples = cfg.samples;
+    out.mesh = cfg.mesh;
+    out.batch_width = cfg.width;
+    out.batch_height = cfg.height;
+    out.batch_tickrate = cfg.tickrate > 0 ? cfg.tickrate : DEFAULT_TICKRATE;
+    out.tick_begin = cfg.samples->frames.front().tick;
+    out.tick_end = cfg.samples->frames.back().tick;
     return out;
 }
 
 const PosedTick& VisibilityBatch::posed(Tick tick) const {
     {
-        std::lock_guard lock(*memo_mu_);
-        if (auto it = pose_memo_.find(tick); it != pose_memo_.end()) {
-            return *it->second;
+        const std::scoped_lock MUTEX_LOCK(*memo_mu);
+        if (auto iter = pose_memo.find(tick); iter != pose_memo.end()) {
+            return *iter->second;
         }
     }
-    auto fresh = std::make_unique<PosedTick>(samples_ != nullptr ? posed_at_tick(*samples_, tick)
-                                                                 : PosedTick{});
-    std::lock_guard lock(*memo_mu_);
-    auto [it, inserted] = pose_memo_.try_emplace(tick, std::move(fresh));
-    return *it->second;
+    auto fresh =
+        std::make_unique<PosedTick>(samples != nullptr ? posedAtTick(*samples, tick) : PosedTick{});
+    const std::scoped_lock MUTEX_LOCK(*memo_mu);
+    auto [iter, inserted] = pose_memo.try_emplace(tick, std::move(fresh));
+    (void)inserted;
+    return *iter->second;
 }
 
 const std::vector<FramePose>& VisibilityBatch::poses(Tick tick) const {
@@ -253,12 +352,12 @@ bool VisibilityBatch::visible(Tick tick, const SteamId& shooter, const SteamId& 
     if (!ready() || tick < tick_begin || tick > tick_end) {
         return false;
     }
-    const LosBatch::Pair key{shooter, enemy};
+    const LosBatch::Pair KEY{shooter, enemy};
     {
-        std::lock_guard lock(*memo_mu_);
-        if (auto pit = vis_memo_.find(key); pit != vis_memo_.end()) {
-            if (auto it = pit->second.find(tick); it != pit->second.end()) {
-                return it->second;
+        const std::scoped_lock MUTEX_LOCK(*memo_mu);
+        if (auto piter = vis_memo.find(KEY); piter != vis_memo.end()) {
+            if (auto iter = piter->second.find(tick); iter != piter->second.end()) {
+                return iter->second;
             }
         }
     }
@@ -274,29 +373,33 @@ bool VisibilityBatch::visible(Tick tick, const SteamId& shooter, const SteamId& 
     const PosedTick& posed_t = posed(tick);
     const FramePose* shooter_pose = posed_t.find(shooter);
     const FramePose* enemy_pose = posed_t.find(enemy);
-    bool ok = false;
+    bool visible_ok = false;
     if (shooter_pose != nullptr && enemy_pose != nullptr && shooter_pose->alive &&
         enemy_pose->alive && !enemy_pose->team_letter.empty() &&
         enemy_pose->team_letter != shooter_pose->team_letter) {
-        if (reuse_valid && reuse_key == key &&
-            (reuse_tick + 1 == tick || reuse_tick == tick + 1) &&
-            same_pose_geom(*shooter_pose, reuse_shooter) &&
-            same_pose_geom(*enemy_pose, reuse_enemy)) {
-            ok = reuse_ok;
+        if (reuse_valid && reuse_key == KEY && (reuse_tick + 1 == tick || reuse_tick == tick + 1) &&
+            samePoseGeom(*shooter_pose, reuse_shooter) && samePoseGeom(*enemy_pose, reuse_enemy)) {
+            visible_ok = reuse_ok;
         } else {
-            ok = hitbox_visible_res(*shooter_pose, *enemy_pose, *mesh_, width, height);
+            visible_ok = hitboxVisibleRes(
+                {.shooter = shooter_pose,
+                 .enemy = enemy_pose,
+                 .mesh = mesh,
+                 .width = batch_width,
+                 .height = batch_height});
             reuse_valid = true;
-            reuse_key = key;
+            reuse_key = KEY;
             reuse_tick = tick;
             reuse_shooter = *shooter_pose;
             reuse_enemy = *enemy_pose;
-            reuse_ok = ok;
+            reuse_ok = visible_ok;
         }
     }
-    std::lock_guard lock(*memo_mu_);
-    auto& by_tick = vis_memo_[key];
-    auto [it, inserted] = by_tick.emplace(tick, ok);
-    return it->second;
+    const std::scoped_lock MUTEX_LOCK(*memo_mu);
+    auto& by_tick = vis_memo[KEY];
+    auto [iter, inserted] = by_tick.emplace(tick, visible_ok);
+    (void)inserted;
+    return iter->second;
 }
 
 } // namespace cyka::aim

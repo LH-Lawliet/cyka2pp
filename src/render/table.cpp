@@ -1,45 +1,49 @@
 #include "cyka/render/table.hpp"
 
 #include "cyka/render/ansi.hpp"
-#include "cyka/render/scoreboard.hpp"
 
 namespace cyka::render {
 
-Result<void> write_table(std::ostream& out, const Match& match, const TableSections& sections) {
+Result<void> writeTable(std::ostream& out, const Match& match, const TableSections& sections) {
     bool any = false;
-    auto run = [&](bool on, auto&& fn) -> Result<void> {
-        if (!on) {
+    auto run_section = [&](bool enabled, auto&& writer) -> Result<void> {
+        if (!enabled) {
             return {};
         }
         if (any) {
             out << '\n';
         }
         any = true;
-        return fn();
+        return writer();
     };
-    if (auto r = run(sections.scoreboard, [&] { return write_scoreboard(out, match); }); !r) {
-        return r;
+    if (auto result = run_section(sections.scoreboard, [&] { return writeScoreboard(out, match); });
+        !result) {
+        return result;
     }
-    if (auto r = run(sections.clutches, [&] { return write_clutches(out, match); }); !r) {
-        return r;
+    if (auto result = run_section(sections.clutches, [&] { return writeClutches(out, match); });
+        !result) {
+        return result;
     }
-    if (auto r = run(sections.aim, [&] { return write_aim(out, match); }); !r) {
-        return r;
+    if (auto result = run_section(sections.aim, [&] { return writeAim(out, match); }); !result) {
+        return result;
     }
-    if (auto r = run(sections.rounds, [&] { return write_rounds(out, match); }); !r) {
-        return r;
+    if (auto result = run_section(sections.rounds, [&] { return writeRounds(out, match); });
+        !result) {
+        return result;
     }
-    if (auto r = run(sections.highlights, [&] { return write_highlights(out, match); }); !r) {
-        return r;
+    if (auto result = run_section(sections.highlights, [&] { return writeHighlights(out, match); });
+        !result) {
+        return result;
     }
-    if (auto r = run(sections.kills, [&] { return write_kills(out, match); }); !r) {
-        return r;
+    if (auto result = run_section(sections.kills, [&] { return writeKills(out, match); });
+        !result) {
+        return result;
     }
     if (!any) {
-        out << kAnsiMuted << "  (no sections selected; try --sections all)" << kAnsiReset << '\n';
+        out << ANSI_MUTED << "  (no sections selected; try --sections all)" << ANSI_RESET << '\n';
     }
     if (!out) {
-        return std::unexpected(Error::Io);
+        return std::unexpected(Error::IO);
     }
     return {};
 }

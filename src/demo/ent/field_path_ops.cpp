@@ -7,33 +7,68 @@
 namespace cyka::demo::ent {
 namespace {
 
-std::int32_t& top(FieldPath& fp) noexcept {
-    return fp.path[static_cast<std::size_t>(fp.last)];
+inline constexpr std::int32_t FP_DELTA_2 = 2;
+inline constexpr std::int32_t FP_DELTA_3 = 3;
+inline constexpr std::int32_t FP_DELTA_4 = 4;
+inline constexpr std::int32_t FP_DELTA_5 = 5;
+inline constexpr std::int32_t FP_PACK4_BIAS = 7;
+inline constexpr std::uint32_t FP_BITS_3 = 3;
+inline constexpr std::uint32_t FP_BITS_4 = 4;
+inline constexpr std::uint32_t FP_BITS_5 = 5;
+inline constexpr std::uint32_t FP_BITS_6 = 6;
+
+// Weights are verbatim from demoinfocs; numeric literals are load-bearing.
+inline constexpr int FP_WT_36271 = 36271;
+inline constexpr int FP_WT_10334 = 10334;
+inline constexpr int FP_WT_1375 = 1375;
+inline constexpr int FP_WT_646 = 646;
+inline constexpr int FP_WT_4128 = 4128;
+inline constexpr int FP_WT_35 = 35;
+inline constexpr int FP_WT_3 = 3;
+inline constexpr int FP_WT_521 = 521;
+inline constexpr int FP_WT_2942 = 2942;
+inline constexpr int FP_WT_560 = 560;
+inline constexpr int FP_WT_471 = 471;
+inline constexpr int FP_WT_10530 = 10530;
+inline constexpr int FP_WT_251 = 251;
+inline constexpr int FP_WT_310 = 310;
+inline constexpr int FP_WT_2 = 2;
+inline constexpr int FP_WT_1837 = 1837;
+inline constexpr int FP_WT_149 = 149;
+inline constexpr int FP_WT_300 = 300;
+inline constexpr int FP_WT_634 = 634;
+inline constexpr int FP_WT_76 = 76;
+inline constexpr int FP_WT_271 = 271;
+inline constexpr int FP_WT_99 = 99;
+inline constexpr int FP_WT_25474 = 25474;
+
+std::int32_t& top(FieldPath& field_path) noexcept {
+    return field_path.path[static_cast<std::size_t>(field_path.last)];
 }
 
-std::int32_t fpv(BitStream& r) noexcept {
-    return static_cast<std::int32_t>(r.read_ubit_var_fp());
+std::int32_t fpv(BitStream& reader) noexcept {
+    return static_cast<std::int32_t>(reader.readUbitVarFp());
 }
 
-std::int32_t bits(BitStream& r, std::uint32_t n) noexcept {
-    return static_cast<std::int32_t>(r.read_bits(n));
+std::int32_t bits(BitStream& reader, std::uint32_t num_bits) noexcept {
+    return static_cast<std::int32_t>(reader.readBits(num_bits));
 }
 
-void push_set(FieldPath& fp, std::int32_t v) noexcept {
-    fp.push();
-    top(fp) = v;
+void pushSet(FieldPath& field_path, std::int32_t value) noexcept {
+    field_path.push();
+    top(field_path) = value;
 }
 
-void push_add(FieldPath& fp, std::int32_t v) noexcept {
-    fp.push();
-    top(fp) += v;
+void pushAdd(FieldPath& field_path, std::int32_t value) noexcept {
+    field_path.push();
+    top(field_path) += value;
 }
 
-void non_topo(BitStream& r, FieldPath& fp, int delta_bias, bool pack4) noexcept {
-    for (int i = 0; i <= fp.last; ++i) {
-        if (r.read_bool()) {
-            fp.path[static_cast<std::size_t>(i)] +=
-                pack4 ? bits(r, 4) - 7 : r.read_var_i32() + delta_bias;
+void nonTopo(BitStream& reader, FieldPath& field_path, int delta_bias, bool pack4) noexcept {
+    for (int idx = 0; idx <= field_path.last; ++idx) {
+        if (reader.readBool()) {
+            field_path.path[static_cast<std::size_t>(idx)] +=
+                pack4 ? bits(reader, FP_BITS_4) - FP_PACK4_BIAS : reader.readVarI32() + delta_bias;
         }
     }
 }
@@ -41,59 +76,60 @@ void non_topo(BitStream& r, FieldPath& fp, int delta_bias, bool pack4) noexcept 
 } // namespace
 
 // clang-format off
-const std::array<FieldPathOp, kFieldPathOpCount> kFieldPathOps{{
-    {36271, [](BitStream&, FieldPath& fp) { top(fp) += 1; }},
-    {10334, [](BitStream&, FieldPath& fp) { top(fp) += 2; }},
-    {1375,  [](BitStream&, FieldPath& fp) { top(fp) += 3; }},
-    {646,   [](BitStream&, FieldPath& fp) { top(fp) += 4; }},
-    {4128,  [](BitStream& r, FieldPath& fp) { top(fp) += fpv(r) + 5; }},
-    {35,    [](BitStream&, FieldPath& fp) { push_set(fp, 0); }},
-    {3,     [](BitStream& r, FieldPath& fp) { push_set(fp, fpv(r)); }},
-    {521,   [](BitStream&, FieldPath& fp) { top(fp) += 1; push_set(fp, 0); }},
-    {2942,  [](BitStream& r, FieldPath& fp) { top(fp) += 1; push_set(fp, fpv(r)); }},
-    {560,   [](BitStream& r, FieldPath& fp) { top(fp) += fpv(r); push_set(fp, 0); }},
-    {471,   [](BitStream& r, FieldPath& fp) { top(fp) += fpv(r) + 2; push_set(fp, fpv(r) + 1); }},
-    {10530, [](BitStream& r, FieldPath& fp) { top(fp) += bits(r, 3) + 2; push_set(fp, bits(r, 3) + 1); }},
-    {251,   [](BitStream& r, FieldPath& fp) { top(fp) += bits(r, 4) + 2; push_set(fp, bits(r, 4) + 1); }},
-    {0,     [](BitStream& r, FieldPath& fp) { push_add(fp, fpv(r)); push_add(fp, fpv(r)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { push_set(fp, bits(r, 5)); push_set(fp, bits(r, 5)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { push_add(fp, fpv(r)); push_add(fp, fpv(r)); push_add(fp, fpv(r)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { push_set(fp, bits(r, 5)); push_set(fp, bits(r, 5)); push_set(fp, bits(r, 5)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += 1; push_add(fp, fpv(r)); push_add(fp, fpv(r)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += 1; push_add(fp, bits(r, 5)); push_add(fp, bits(r, 5)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += 1; push_add(fp, fpv(r)); push_add(fp, fpv(r)); push_add(fp, fpv(r)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += 1; push_add(fp, bits(r, 5)); push_add(fp, bits(r, 5)); push_add(fp, bits(r, 5)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += static_cast<std::int32_t>(r.read_ubit_var()) + 2; push_add(fp, fpv(r)); push_add(fp, fpv(r)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += static_cast<std::int32_t>(r.read_ubit_var()) + 2; push_add(fp, bits(r, 5)); push_add(fp, bits(r, 5)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += static_cast<std::int32_t>(r.read_ubit_var()) + 2; push_add(fp, fpv(r)); push_add(fp, fpv(r)); push_add(fp, fpv(r)); }},
-    {0,     [](BitStream& r, FieldPath& fp) { top(fp) += static_cast<std::int32_t>(r.read_ubit_var()) + 2; push_add(fp, bits(r, 5)); push_add(fp, bits(r, 5)); push_add(fp, bits(r, 5)); }},
-    {0,     [](BitStream& r, FieldPath& fp) {
-                const auto n = static_cast<int>(r.read_ubit_var());
-                top(fp) += static_cast<std::int32_t>(r.read_ubit_var());
-                for (int i = 0; i < n; ++i) { push_add(fp, fpv(r)); }
+// Weights are verbatim from demoinfocs; numeric literals are load-bearing.
+const std::array<FieldPathOp, FIELD_PATH_OP_COUNT> FIELD_PATH_OPS{{
+    {.weight=FP_WT_36271, .fn=[](BitStream&, FieldPath& field_path) { top(field_path) += 1; }},
+    {.weight=FP_WT_10334, .fn=[](BitStream&, FieldPath& field_path) { top(field_path) += FP_DELTA_2; }},
+    {.weight=FP_WT_1375,  .fn=[](BitStream&, FieldPath& field_path) { top(field_path) += FP_DELTA_3; }},
+    {.weight=FP_WT_646,   .fn=[](BitStream&, FieldPath& field_path) { top(field_path) += FP_DELTA_4; }},
+    {.weight=FP_WT_4128,  .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += fpv(reader) + FP_DELTA_5; }},
+    {.weight=FP_WT_35,    .fn=[](BitStream&, FieldPath& field_path) { pushSet(field_path, 0); }},
+    {.weight=FP_WT_3,     .fn=[](BitStream& reader, FieldPath& field_path) { pushSet(field_path, fpv(reader)); }},
+    {.weight=FP_WT_521,   .fn=[](BitStream&, FieldPath& field_path) { top(field_path) += 1; pushSet(field_path, 0); }},
+    {.weight=FP_WT_2942,  .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += 1; pushSet(field_path, fpv(reader)); }},
+    {.weight=FP_WT_560,   .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += fpv(reader); pushSet(field_path, 0); }},
+    {.weight=FP_WT_471,   .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += fpv(reader) + FP_DELTA_2; pushSet(field_path, fpv(reader) + 1); }},
+    {.weight=FP_WT_10530, .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += bits(reader, FP_BITS_3) + FP_DELTA_2; pushSet(field_path, bits(reader, FP_BITS_3) + 1); }},
+    {.weight=FP_WT_251,   .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += bits(reader, FP_BITS_4) + FP_DELTA_2; pushSet(field_path, bits(reader, FP_BITS_4) + 1); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { pushSet(field_path, bits(reader, FP_BITS_5)); pushSet(field_path, bits(reader, FP_BITS_5)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { pushSet(field_path, bits(reader, FP_BITS_5)); pushSet(field_path, bits(reader, FP_BITS_5)); pushSet(field_path, bits(reader, FP_BITS_5)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += 1; pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += 1; pushAdd(field_path, bits(reader, FP_BITS_5)); pushAdd(field_path, bits(reader, FP_BITS_5)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += 1; pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += 1; pushAdd(field_path, bits(reader, FP_BITS_5)); pushAdd(field_path, bits(reader, FP_BITS_5)); pushAdd(field_path, bits(reader, FP_BITS_5)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += static_cast<std::int32_t>(reader.readUbitVar()) + FP_DELTA_2; pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += static_cast<std::int32_t>(reader.readUbitVar()) + FP_DELTA_2; pushAdd(field_path, bits(reader, FP_BITS_5)); pushAdd(field_path, bits(reader, FP_BITS_5)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += static_cast<std::int32_t>(reader.readUbitVar()) + FP_DELTA_2; pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); pushAdd(field_path, fpv(reader)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { top(field_path) += static_cast<std::int32_t>(reader.readUbitVar()) + FP_DELTA_2; pushAdd(field_path, bits(reader, FP_BITS_5)); pushAdd(field_path, bits(reader, FP_BITS_5)); pushAdd(field_path, bits(reader, FP_BITS_5)); }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) {
+                const auto NUM = static_cast<int>(reader.readUbitVar());
+                top(field_path) += static_cast<std::int32_t>(reader.readUbitVar());
+                for (int idx = 0; idx < NUM; ++idx) { pushAdd(field_path, fpv(reader)); }
             }},
-    {310,   [](BitStream& r, FieldPath& fp) {
-                for (int i = 0; i <= fp.last; ++i) {
-                    if (r.read_bool()) { fp.path[static_cast<std::size_t>(i)] += r.read_var_i32() + 1; }
+    {.weight=FP_WT_310,   .fn=[](BitStream& reader, FieldPath& field_path) {
+                for (int idx = 0; idx <= field_path.last; ++idx) {
+                    if (reader.readBool()) { field_path.path[static_cast<std::size_t>(idx)] += reader.readVarI32() + 1; }
                 }
-                const auto count = static_cast<int>(r.read_ubit_var());
-                for (int i = 0; i < count; ++i) { push_set(fp, fpv(r)); }
+                const auto COUNT = static_cast<int>(reader.readUbitVar());
+                for (int idx = 0; idx < COUNT; ++idx) { pushSet(field_path, fpv(reader)); }
             }},
-    {2,     [](BitStream&, FieldPath& fp) { fp.pop(1); top(fp) += 1; }},
-    {0,     [](BitStream& r, FieldPath& fp) { fp.pop(1); top(fp) += fpv(r) + 1; }},
-    {1837,  [](BitStream&, FieldPath& fp) { fp.pop(fp.last); fp.path[0] += 1; }},
-    {149,   [](BitStream& r, FieldPath& fp) { fp.pop(fp.last); fp.path[0] += fpv(r) + 1; }},
-    {300,   [](BitStream& r, FieldPath& fp) { fp.pop(fp.last); fp.path[0] += bits(r, 3) + 1; }},
-    {634,   [](BitStream& r, FieldPath& fp) { fp.pop(fp.last); fp.path[0] += bits(r, 6) + 1; }},
-    {0,     [](BitStream& r, FieldPath& fp) { fp.pop(fpv(r)); top(fp) += 1; }},
-    {0,     [](BitStream& r, FieldPath& fp) { fp.pop(fpv(r)); top(fp) += r.read_var_i32(); }},
-    {1,     [](BitStream& r, FieldPath& fp) { fp.pop(fpv(r)); non_topo(r, fp, 0, false); }},
-    {76,    [](BitStream& r, FieldPath& fp) { non_topo(r, fp, 0, false); }},
-    {271,   [](BitStream&, FieldPath& fp) {
-                if (fp.last > 0) { fp.path[static_cast<std::size_t>(fp.last - 1)] += 1; }
+    {.weight=FP_WT_2,     .fn=[](BitStream&, FieldPath& field_path) { field_path.pop(1); top(field_path) += 1; }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(1); top(field_path) += fpv(reader) + 1; }},
+    {.weight=FP_WT_1837,  .fn=[](BitStream&, FieldPath& field_path) { field_path.pop(field_path.last); field_path.path[0] += 1; }},
+    {.weight=FP_WT_149,   .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(field_path.last); field_path.path[0] += fpv(reader) + 1; }},
+    {.weight=FP_WT_300,   .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(field_path.last); field_path.path[0] += bits(reader, FP_BITS_3) + 1; }},
+    {.weight=FP_WT_634,   .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(field_path.last); field_path.path[0] += bits(reader, FP_BITS_6) + 1; }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(fpv(reader)); top(field_path) += 1; }},
+    {.weight=0,     .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(fpv(reader)); top(field_path) += reader.readVarI32(); }},
+    {.weight=1,     .fn=[](BitStream& reader, FieldPath& field_path) { field_path.pop(fpv(reader)); nonTopo(reader, field_path, 0, false); }},
+    {.weight=FP_WT_76,    .fn=[](BitStream& reader, FieldPath& field_path) { nonTopo(reader, field_path, 0, false); }},
+    {.weight=FP_WT_271,   .fn=[](BitStream&, FieldPath& field_path) {
+                if (field_path.last > 0) { field_path.path[static_cast<std::size_t>(field_path.last - 1)] += 1; }
             }},
-    {99,    [](BitStream& r, FieldPath& fp) { non_topo(r, fp, 0, true); }},
-    {25474, [](BitStream&, FieldPath& fp) { fp.done = true; }},
+    {.weight=FP_WT_99,    .fn=[](BitStream& reader, FieldPath& field_path) { nonTopo(reader, field_path, 0, true); }},
+    {.weight=FP_WT_25474, .fn=[](BitStream&, FieldPath& field_path) { field_path.done = true; }},
 }};
 // clang-format on
 

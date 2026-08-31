@@ -1,7 +1,7 @@
+#include "cyka/analyze.hpp"
 #include "test_harness.hpp"
 
-#include "cyka/analyze.hpp"
-
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -10,15 +10,15 @@
 
 namespace {
 
-[[nodiscard]] std::filesystem::path find_demo(const std::string& file) {
+[[nodiscard]] std::filesystem::path findDemo(const std::string& file) {
     namespace fs = std::filesystem;
-    const fs::path candidates[] = {
+    const std::array<fs::path, 2> CANDIDATES = {
         fs::path(CYKA_SOURCE_DIR) / "testdata" / "demos" / file,
         fs::path(CYKA_DEMO_DIR) / file,
     };
-    for (const auto& p : candidates) {
-        if (fs::exists(p)) {
-            return p;
+    for (const auto& path : CANDIDATES) {
+        if (fs::exists(path)) {
+            return path;
         }
     }
     return {};
@@ -28,94 +28,97 @@ namespace {
 
 void test_corpus() {
     namespace fs = std::filesystem;
-    const fs::path man = fs::path(CYKA_SOURCE_DIR) / "testdata" / "corpus" / "manifest.json";
-    if (!fs::exists(man)) {
+    const fs::path MAN = fs::path(CYKA_SOURCE_DIR) / "testdata" / "corpus" / "manifest.json";
+    if (!fs::exists(MAN)) {
         std::cerr << "skip corpus: no manifest\n";
         return;
     }
-    nlohmann::json j;
+    nlohmann::json manifest;
     {
-        std::ifstream in(man);
-        in >> j;
+        std::ifstream input(MAN);
+        input >> manifest;
     }
-    if (!j.contains("demos") || !j["demos"].is_array()) {
+    if (!manifest.contains("demos") || !manifest["demos"].is_array()) {
         CYKA_CHECK(false);
         return;
     }
 
     cyka::Options opt;
-    opt.format = cyka::OutputFormat::Json;
+    opt.format = cyka::OutputFormat::JSON;
     if (fs::exists(CYKA_MAPS_DIR)) {
         opt.maps_dir = CYKA_MAPS_DIR;
     }
 
     int ran = 0;
-    for (const auto& d : j["demos"]) {
-        const std::string file = d.value("file", "");
-        const auto path = find_demo(file);
-        if (path.empty()) {
-            std::cerr << "skip corpus " << d.value("id", file) << ": demo missing (" << file
-                      << ")\n";
+    for (const auto& demo_entry : manifest["demos"]) {
+        const std::string FILE = demo_entry.value("file", "");
+        const auto PATH = findDemo(FILE);
+        if (PATH.empty()) {
+            std::cerr << "skip corpus " << demo_entry.value("id", FILE) << ": demo missing ("
+                      << FILE << ")\n";
             continue;
         }
         ++ran;
-        auto result = cyka::analyze_file(path, opt);
+        auto result = cyka::analyzeFile(PATH, opt);
         CYKA_CHECK(static_cast<bool>(result));
         if (!result) {
             continue;
         }
         const auto& match = *result;
-        if (d.contains("map")) {
-            CYKA_CHECK(match.map_name == d["map"].get<std::string>());
+        if (demo_entry.contains("map")) {
+            CYKA_CHECK(match.map_name == demo_entry["map"].get<std::string>());
         }
         // Team A/B letter can swap vs stored JSON; accept either orientation.
-        if (d.contains("scoreA") && d.contains("scoreB") && match.team_a && match.team_b) {
-            const int want_a = d["scoreA"].get<int>();
-            const int want_b = d["scoreB"].get<int>();
-            const bool ok = (match.team_a->score == want_a && match.team_b->score == want_b) ||
-                            (match.team_a->score == want_b && match.team_b->score == want_a);
-            CYKA_CHECK(ok);
-        } else if (d.contains("scoreA") && match.team_a) {
-            CYKA_CHECK(match.team_a->score == d["scoreA"].get<int>());
-        } else if (d.contains("scoreB") && match.team_b) {
-            CYKA_CHECK(match.team_b->score == d["scoreB"].get<int>());
+        if (demo_entry.contains("scoreA") && demo_entry.contains("scoreB") && match.team_a &&
+            match.team_b) {
+            const int WANT_A = demo_entry["scoreA"].get<int>();
+            const int WANT_B = demo_entry["scoreB"].get<int>();
+            const bool SCORE_OK =
+                (match.team_a->score == WANT_A && match.team_b->score == WANT_B) ||
+                (match.team_a->score == WANT_B && match.team_b->score == WANT_A);
+            CYKA_CHECK(SCORE_OK);
+        } else if (demo_entry.contains("scoreA") && match.team_a) {
+            CYKA_CHECK(match.team_a->score == demo_entry["scoreA"].get<int>());
+        } else if (demo_entry.contains("scoreB") && match.team_b) {
+            CYKA_CHECK(match.team_b->score == demo_entry["scoreB"].get<int>());
         }
-        if (d.contains("rounds")) {
-            CYKA_CHECK(static_cast<int>(match.rounds.size()) == d["rounds"].get<int>());
+        if (demo_entry.contains("rounds")) {
+            CYKA_CHECK(static_cast<int>(match.rounds.size()) == demo_entry["rounds"].get<int>());
         }
-        if (d.contains("minRounds")) {
-            CYKA_CHECK(static_cast<int>(match.rounds.size()) >= d["minRounds"].get<int>());
+        if (demo_entry.contains("minRounds")) {
+            CYKA_CHECK(static_cast<int>(match.rounds.size()) >= demo_entry["minRounds"].get<int>());
         }
-        if (d.contains("minKills")) {
-            CYKA_CHECK(static_cast<int>(match.kills.size()) >= d["minKills"].get<int>());
+        if (demo_entry.contains("minKills")) {
+            CYKA_CHECK(static_cast<int>(match.kills.size()) >= demo_entry["minKills"].get<int>());
         }
-        if (d.contains("maxPlayers")) {
-            CYKA_CHECK(static_cast<int>(match.players.size()) <= d["maxPlayers"].get<int>());
+        if (demo_entry.contains("maxPlayers")) {
+            CYKA_CHECK(
+                static_cast<int>(match.players.size()) <= demo_entry["maxPlayers"].get<int>());
         }
-        if (d.contains("rankType")) {
-            const int want = d["rankType"].get<int>();
-            bool ok = false;
-            for (const auto& [_, player] : match.players) {
-                if (player.rank_type == want) {
-                    ok = true;
+        if (demo_entry.contains("rankType")) {
+            const int WANT = demo_entry["rankType"].get<int>();
+            bool found_rank = false;
+            for (const auto& [_steam_id, player] : match.players) {
+                if (player.rank_type == WANT) {
+                    found_rank = true;
                     break;
                 }
             }
-            CYKA_CHECK(ok);
+            CYKA_CHECK(found_rank);
         }
-        if (d.contains("expectEndReason")) {
-            const std::string want = d["expectEndReason"].get<std::string>();
-            bool ok = false;
+        if (demo_entry.contains("expectEndReason")) {
+            const std::string WANT = demo_entry["expectEndReason"].get<std::string>();
+            bool found_reason = false;
             for (const auto& round : match.rounds) {
                 if (!round) {
                     continue;
                 }
-                if (round->end_reason.find(want) != std::string::npos) {
-                    ok = true;
+                if (round->end_reason.contains(WANT)) {
+                    found_reason = true;
                     break;
                 }
             }
-            CYKA_CHECK(ok);
+            CYKA_CHECK(found_reason);
         }
 
         std::unordered_map<cyka::SteamId, std::string> team_of;
@@ -134,22 +137,22 @@ void test_corpus() {
             } else if (kill->killer_steam_id == kill->victim_steam_id) {
                 ++self_kills;
             } else {
-                const auto kt = team_of.find(kill->killer_steam_id);
-                const auto vt = team_of.find(kill->victim_steam_id);
-                if (kt != team_of.end() && vt != team_of.end() && !kt->second.empty() &&
-                    kt->second == vt->second) {
+                const auto KILLER_TEAM = team_of.find(kill->killer_steam_id);
+                const auto VICTIM_TEAM = team_of.find(kill->victim_steam_id);
+                if (KILLER_TEAM != team_of.end() && VICTIM_TEAM != team_of.end() &&
+                    !KILLER_TEAM->second.empty() && KILLER_TEAM->second == VICTIM_TEAM->second) {
                     ++same_team_kills;
                 }
             }
         }
-        if (d.contains("minSameTeamKills")) {
-            CYKA_CHECK(same_team_kills >= d["minSameTeamKills"].get<int>());
+        if (demo_entry.contains("minSameTeamKills")) {
+            CYKA_CHECK(same_team_kills >= demo_entry["minSameTeamKills"].get<int>());
         }
-        if (d.contains("minSelfKills")) {
-            CYKA_CHECK(self_kills >= d["minSelfKills"].get<int>());
+        if (demo_entry.contains("minSelfKills")) {
+            CYKA_CHECK(self_kills >= demo_entry["minSelfKills"].get<int>());
         }
-        if (d.contains("minEmptyKillerKills")) {
-            CYKA_CHECK(empty_killer >= d["minEmptyKillerKills"].get<int>());
+        if (demo_entry.contains("minEmptyKillerKills")) {
+            CYKA_CHECK(empty_killer >= demo_entry["minEmptyKillerKills"].get<int>());
         }
     }
     if (ran == 0) {

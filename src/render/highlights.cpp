@@ -1,6 +1,6 @@
-#include "cyka/render/table.hpp"
-
 #include "cyka/render/ansi.hpp"
+#include "cyka/render/layout.hpp"
+#include "cyka/render/table.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -8,46 +8,54 @@
 #include <vector>
 
 namespace cyka::render {
+namespace {
 
-Result<void> write_highlights(std::ostream& out, const Match& match) {
+[[nodiscard]] std::string truncateName(std::string name) {
+    if (name.size() > static_cast<std::size_t>(COL_NAME)) {
+        name.resize(static_cast<std::size_t>(COL_TRUNC));
+        name += "...";
+    }
+    return name;
+}
+
+} // namespace
+
+Result<void> writeHighlights(std::ostream& out, const Match& match) {
     std::vector<const Highlight*> rows;
-    for (const auto& h : match.highlights) {
-        if (h.type == "kill" || h.type == "multi_kill") {
-            rows.push_back(&h);
+    for (const auto& highlight : match.highlights) {
+        if (highlight.type == "kill" || highlight.type == "multi_kill") {
+            rows.push_back(&highlight);
         }
     }
-    std::sort(rows.begin(), rows.end(), [](const Highlight* a, const Highlight* b) {
-        return a->start_tick < b->start_tick;
+    std::ranges::sort(rows, [](const Highlight* lhs, const Highlight* rhs) {
+        return lhs->start_tick < rhs->start_tick;
     });
 
-    out << kAnsiBold << "  Highlights" << kAnsiReset << "  " << kAnsiMuted << "(" << rows.size()
-        << " kill/multi; round clips omitted — use --sections rounds)" << kAnsiReset << '\n';
-    out << kAnsiCyan << kAnsiBold << "  " << std::left << std::setw(6) << "R" << std::setw(12)
-        << "Type" << std::setw(16) << "Player" << std::setw(4) << "K" << "  Weapons / tags"
-        << kAnsiReset << '\n';
-    out << kAnsiMuted << "  " << std::string(72, '-') << kAnsiReset << '\n';
+    out << ANSI_BOLD << "  Highlights" << ANSI_RESET << "  " << ANSI_MUTED << "(" << rows.size()
+        << " kill/multi; round clips omitted — use --sections rounds)" << ANSI_RESET << '\n';
+    out << ANSI_CYAN << ANSI_BOLD << "  " << std::left << std::setw(COL_HIGHLIGHT_R) << "R"
+        << std::setw(COL_HIGHLIGHT_TYPE) << "Type" << std::setw(COL_NAME) << "Player"
+        << std::setw(COL_HIGHLIGHT_K) << "K" << "  Weapons / tags" << ANSI_RESET << '\n';
+    out << ANSI_MUTED << "  " << std::string(COL_KILL_RULE, '-') << ANSI_RESET << '\n';
 
-    for (const Highlight* h : rows) {
-        std::string name = h->player_name;
-        if (name.size() > 16) {
-            name.resize(13);
-            name += "...";
+    for (const Highlight* highlight : rows) {
+        out << "  " << std::left << std::setw(COL_HIGHLIGHT_R) << highlight->round_number
+            << std::setw(COL_HIGHLIGHT_TYPE) << highlight->type << std::setw(COL_NAME)
+            << truncateName(highlight->player_name) << std::setw(COL_HIGHLIGHT_K)
+            << highlight->kill_count << "  ";
+        if (!highlight->description.empty()) {
+            out << highlight->description;
         }
-        out << "  " << std::left << std::setw(6) << h->round_number << std::setw(12) << h->type
-            << std::setw(16) << name << std::setw(4) << h->kill_count << "  ";
-        if (!h->description.empty()) {
-            out << h->description;
-        }
-        if (!h->tags.empty()) {
-            out << "  " << h->tags;
+        if (!highlight->tags.empty()) {
+            out << "  " << highlight->tags;
         }
         out << '\n';
     }
     if (rows.empty()) {
-        out << kAnsiMuted << "  (none)" << kAnsiReset << '\n';
+        out << ANSI_MUTED << "  (none)" << ANSI_RESET << '\n';
     }
     if (!out) {
-        return std::unexpected(Error::Io);
+        return std::unexpected(Error::IO);
     }
     return {};
 }

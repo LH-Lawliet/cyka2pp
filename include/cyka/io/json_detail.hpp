@@ -6,7 +6,7 @@
 
 namespace cyka::io::detail {
 
-[[nodiscard]] nlohmann::json player_to_json(const Player& p);
-[[nodiscard]] nlohmann::json match_to_json(const Match& m);
+[[nodiscard]] nlohmann::json playerToJson(const Player& player);
+[[nodiscard]] nlohmann::json matchToJson(const Match& match);
 
 } // namespace cyka::io::detail

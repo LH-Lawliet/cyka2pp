@@ -59,9 +59,9 @@ struct RawShot {
     std::string weapon;
     double pitch{0};
     double yaw{0};
-    double x{0};
-    double y{0};
-    double z{0};
+    double pos_x{0};
+    double pos_y{0};
+    double pos_z{0};
     bool scoped{false};
     bool has_aim{false}; // true when pitch/yaw/pos captured from entities
 };
@@ -82,9 +82,9 @@ struct RawPose {
     int round_number{0};
     SteamId steam_id;
     std::string team_letter; // A|B
-    double x{0};
-    double y{0};
-    double z{0};
+    double pos_x{0};
+    double pos_y{0};
+    double pos_z{0};
     double pitch{0};
     double yaw{0};
     int health{0};
@@ -95,20 +95,21 @@ struct RawPose {
     int team_num{0}; // 2=T 3=CT
 };
 
-
 struct RawSmoke {
     Tick start_tick{0};
     Tick end_tick{0}; // 0 = still up at demo end
-    double x{0};
-    double y{0};
-    double z{0};
+    double pos_x{0};
+    double pos_y{0};
+    double pos_z{0};
 };
+
+inline constexpr double DEFAULT_TICKRATE = 64.0;
 
 /// Intermediate parse product before metrics / aim / highlights.
 struct RawMatch {
     std::string map_name;
     std::string workshop_id;
-    double tickrate{64.0};
+    double tickrate{DEFAULT_TICKRATE};
     int ticks{0};
     Millis duration_ms{0};
     std::vector<RawPlayer> players;

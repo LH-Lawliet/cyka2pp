@@ -5,106 +5,147 @@
 #include "cyka/demo/string_tables.hpp"
 #include "cyka/types.hpp"
 
+#include <array>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 
 namespace cyka::demo {
 
+inline constexpr int TEAM_T = 2;
+inline constexpr int TEAM_CT = 3;
+inline constexpr std::size_t SIDE_LETTER_SIZE = 4;
+
 /// Consumes game events + userinfo into a RawMatch (scoreboard-oriented).
 class CollectingListener {
   public:
-    void on_userinfo(const UserInfoById& users);
-    void on_event(Tick tick, const GameEvent& ev);
+    void onUserinfo(const UserInfoById& users);
+    void onEvent(Tick tick, const GameEvent& event);
     /// CCSGameRulesProxy snapshot (CS2 often omits round_end on surrender).
-    void on_game_rules(Tick tick, int win_reason, int win_status, int rounds_played,
-                       int game_phase);
+    struct GameRulesSnapshot {
+        Tick tick{};
+        int win_reason{0};
+        int win_status{0};
+        int rounds_played{0};
+        int game_phase{0};
+    };
+    void onGameRules(const GameRulesSnapshot& snap);
     void finish();
 
-    [[nodiscard]] RawMatch& raw() noexcept { return raw_; }
-    [[nodiscard]] const RawMatch& raw() const noexcept { return raw_; }
+    [[nodiscard]] RawMatch& raw() noexcept { return raw_match; }
+    [[nodiscard]] const RawMatch& raw() const noexcept { return raw_match; }
 
-    void set_map(std::string map, std::string workshop = {});
-    void set_ticks(int ticks, double tickrate);
+    void setMap(std::string map, std::string workshop = {});
+
+    struct TickClock {
+        int ticks{0};
+        double tickrate{0};
+    };
+    void setTicks(TickClock clock);
 
     /// Entity-driven inputs (PacketEntities): player discovery + pose samples.
-    [[nodiscard]] bool round_live() const noexcept { return round_live_; }
-    [[nodiscard]] int round_number() const noexcept { return round_number_; }
+    [[nodiscard]] bool roundLive() const noexcept { return round_live; }
+    [[nodiscard]] int roundNumber() const noexcept { return round_number; }
     /// CS team number (2 = T, 3 = CT) → scoreboard letter, "" when unknown.
-    [[nodiscard]] std::string team_letter(int team) const {
-        return team >= 2 && team <= 3 ? side_letter_[team] : std::string{};
+    [[nodiscard]] std::string teamLetter(int team) const {
+        return team >= TEAM_T && team <= TEAM_CT
+                 ? side_letter[static_cast<std::size_t>(team)]
+                 : std::string{};
     }
-    void observe_entity_player(const SteamId& steam, const std::string& name, int team = 0,
-                               int mvp_count = -1, int rank_type = -1, int ranking = -1,
-                               int competitive_wins = -1) {
-        ensure_player(steam, name, 0);
-        note_team(steam, team);
-        if (mvp_count >= 0) {
-            note_mvp_count(steam, mvp_count);
+
+    struct EntityPlayer {
+        SteamId steam;
+        std::string name;
+        int team{0};
+        int mvp_count{-1};
+        int rank_type{-1};
+        int ranking{-1};
+        int competitive_wins{-1};
+    };
+    void observeEntityPlayer(const EntityPlayer& player) {
+        ensurePlayer(player.steam, player.name, 0);
+        noteTeam(player.steam, player.team);
+        if (player.mvp_count >= 0) {
+            noteMvpCount(player.steam, player.mvp_count);
         }
-        if (rank_type >= 0 || ranking >= 0 || competitive_wins >= 0) {
-            note_rank(steam, rank_type, ranking, competitive_wins);
+        if (player.rank_type >= 0 || player.ranking >= 0 || player.competitive_wins >= 0) {
+            noteRank({.steam = player.steam,
+                      .rank_type = player.rank_type,
+                      .ranking = player.ranking,
+                      .competitive_wins = player.competitive_wins});
         }
     }
-    void add_pose(RawPose pose) { raw_.poses.push_back(std::move(pose)); }
+    void addPose(RawPose pose) { raw().poses.push_back(std::move(pose)); }
 
     /// Optional: capture eye angles/pos at weapon_fire from live entities.
     using AimCapture = bool (*)(void* ctx, const SteamId& steam, RawShot& shot);
-    void set_aim_capture(AimCapture fn, void* ctx) {
-        aim_capture_ = fn;
-        aim_capture_ctx_ = ctx;
+    void setAimCapture(AimCapture callback, void* ctx) {
+        aim_capture = callback;
+        aim_capture_ctx = ctx;
     }
     /// Optional: pre-hurt HP from entities (for overkill clamp). Returns -1 if unknown.
     using HealthLookup = int (*)(void* ctx, const SteamId& steam);
-    void set_health_lookup(HealthLookup fn, void* ctx) {
-        health_lookup_ = fn;
-        health_lookup_ctx_ = ctx;
+    void setHealthLookup(HealthLookup callback, void* ctx) {
+        health_lookup = callback;
+        health_lookup_ctx = ctx;
     }
 
   private:
-    [[nodiscard]] SteamId steam_for_userid(std::int32_t userid) const;
-    [[nodiscard]] std::string name_for_userid(std::int32_t userid) const;
-    void ensure_player(const SteamId& steam, const std::string& name, int userid);
-    [[nodiscard]] RawPlayer* find_player(const SteamId& steam);
+    [[nodiscard]] SteamId steamForUserid(std::int32_t userid) const;
+    [[nodiscard]] std::string nameForUserid(std::int32_t userid) const;
+    void ensurePlayer(const SteamId& steam, const std::string& name, int userid);
+    [[nodiscard]] RawPlayer* findPlayer(const SteamId& steam);
     /// Pin steam → A|B from CS team 2/3 using the current side_letter_ map.
-    void note_team(const SteamId& steam, int team);
+    void noteTeam(const SteamId& steam, int team);
     /// Keep the highest observed CCSPlayerController::m_iMVPs for this player.
-    void note_mvp_count(const SteamId& steam, int mvp_count);
+    void noteMvpCount(const SteamId& steam, int mvp_count);
     /// Keep the latest non-zero competitive rank fields for this player.
-    void note_rank(const SteamId& steam, int rank_type, int ranking, int competitive_wins);
+    struct PlayerRank {
+        SteamId steam;
+        int rank_type{0};
+        int ranking{0};
+        int competitive_wins{0};
+    };
+    void noteRank(const PlayerRank& rank);
+
+    struct RoundEnd {
+        Tick tick{};
+        int winner_team{0};
+        std::string reason;
+    };
+    void beginRound(Tick tick);
+    void endRound(RoundEnd end);
     /// Fill gaps in team_of_ by 2-coloring the kill graph (forfeit / missing events).
-    void infer_teams_from_kills();
-    void begin_round(Tick tick);
-    void end_round(Tick tick, int winner_team, std::string reason);
+    void inferTeamsFromKills();
     /// CS2 demos often omit round_end; infer winner from bombs / wipe.
-    void close_round_inferred(Tick tick);
+    void closeRoundInferred(Tick tick);
 
-    void on_round_mvp(const GameEvent& ev);
-    void on_player_blind(const GameEvent& ev);
-    void on_bomb_planted(const GameEvent& ev);
-    void on_bomb_defused(const GameEvent& ev);
-    void on_player_hurt(Tick tick, const GameEvent& ev);
-    void add_utility_damage(const SteamId& attacker, std::string_view weapon, int dmg);
+    void onRoundMvp(const GameEvent& event);
+    void onPlayerBlind(const GameEvent& event);
+    void onBombPlanted(const GameEvent& event);
+    void onBombDefused(const GameEvent& event);
+    void onPlayerHurt(Tick tick, const GameEvent& event);
+    void addUtilityDamage(const SteamId& attacker, std::string_view weapon, int dmg);
 
-    RawMatch raw_;
-    UserInfoById users_;
-    std::unordered_map<SteamId, std::string> team_of_; // steam → A|B
+    RawMatch raw_match;
+    UserInfoById users;
+    std::unordered_map<SteamId, std::string> team_of; // steam → A|B
     /// CS team 2(T)/3(CT) → letter; swaps on side switch heuristic.
-    std::string side_letter_[4]{"", "", "B", "A"}; // index by team#
-    int round_number_{0};
-    bool round_live_{false};
-    bool match_started_{false};
-    bool match_over_{false};
-    bool surrender_recorded_{false};
-    Tick freeze_start_{0};
-    RawRound pending_{};
-    bool have_pending_{false};
+    std::array<std::string, SIDE_LETTER_SIZE> side_letter{"", "", "B", "A"}; // index by team#
+    int round_number{0};
+    bool round_live{false};
+    bool match_started{false};
+    bool match_over{false};
+    bool surrender_recorded{false};
+    Tick freeze_start{0};
+    RawRound pending{};
+    bool have_pending{false};
     /// "" | "planted" | "defused" | "exploded" within the live round.
-    std::string bomb_state_;
-    AimCapture aim_capture_{nullptr};
-    void* aim_capture_ctx_{nullptr};
-    HealthLookup health_lookup_{nullptr};
-    void* health_lookup_ctx_{nullptr};
+    std::string bomb_state;
+    AimCapture aim_capture{nullptr};
+    void* aim_capture_ctx{nullptr};
+    HealthLookup health_lookup{nullptr};
+    void* health_lookup_ctx{nullptr};
 };
 
 } // namespace cyka::demo

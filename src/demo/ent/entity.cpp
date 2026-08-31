@@ -5,48 +5,48 @@
 
 namespace cyka::demo::ent {
 
-void Entity::apply_poly(int id, const EntSerializer* ser) {
-    if (id < 0) {
+void Entity::applyPoly(int poly_id, const EntSerializer* ser) {
+    if (poly_id < 0) {
         return;
     }
-    const auto i = static_cast<std::size_t>(id);
-    if (i >= poly_serializers_.size()) {
-        poly_serializers_.resize(i + 1, nullptr);
+    const auto IDX = static_cast<std::size_t>(poly_id);
+    if (IDX >= poly_serializers.size()) {
+        poly_serializers.resize(IDX + 1, nullptr);
     }
-    poly_serializers_[i] = ser;
+    poly_serializers[IDX] = ser;
 }
 
-bool Entity::read_fields(BitStream& r, std::vector<FieldPath>& scratch) {
-    if (cls_ == nullptr || cls_->serializer == nullptr) {
+bool Entity::readFields(BitStream& reader, std::vector<FieldPath>& scratch) {
+    if (ent_class == nullptr || ent_class->serializer == nullptr) {
         return false;
     }
-    const int n = read_field_paths(r, scratch);
-    if (n < 0) {
+    const int COUNT = readFieldPaths(reader, scratch);
+    if (COUNT < 0) {
         return false;
     }
-    for (int i = 0; i < n; ++i) {
-        const FieldPath& fp = scratch[static_cast<std::size_t>(i)];
-        const DecodeSel sel = cls_->serializer->select(fp, 0, poly_serializers_);
-        if (!sel.ok || sel.spec == nullptr) {
+    for (int idx = 0; idx < COUNT; ++idx) {
+        const FieldPath& fpath = scratch[static_cast<std::size_t>(idx)];
+        const DecodeSel SEL = ent_class->serializer->select(fpath, 0, poly_serializers);
+        if (!SEL.ok || SEL.spec == nullptr) {
             return false;
         }
-        EntValue v = decode_value(*sel.spec, r);
-        if (sel.spec->op == DecOp::PolyBase && sel.field != nullptr) {
+        EntValue value = decodeValue(*SEL.spec, reader);
+        if (SEL.spec->op == DecOp::POLY_BASE && SEL.field != nullptr) {
             const EntSerializer* ser = nullptr;
-            if (v.b) {
-                if (v.u >= sel.field->poly_types.size()) {
+            if (value.b) {
+                if (value.u >= SEL.field->poly_types.size()) {
                     return false;
                 }
-                ser = sel.field->poly_types[static_cast<std::size_t>(v.u)];
+                ser = SEL.field->poly_types[static_cast<std::size_t>(value.u)];
             }
-            apply_poly(sel.field->poly_serializer_id, ser);
-            if (tracked_) {
-                state_[fp.key()] = EntValue::of_bool(v.b);
+            applyPoly(SEL.field->poly_serializer_id, ser);
+            if (is_tracked) {
+                prop_state[fpath.key()] = EntValue::ofBool(value.b);
             }
-        } else if (tracked_) {
-            state_[fp.key()] = std::move(v);
+        } else if (is_tracked) {
+            prop_state[fpath.key()] = std::move(value);
         }
-        if (r.failed()) {
+        if (reader.failed()) {
             return false;
         }
     }

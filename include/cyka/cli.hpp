@@ -16,7 +16,7 @@ struct Args {
     std::string error;
 };
 
-[[nodiscard]] Args parse_args(std::span<char*> argv);
-void print_help(std::string_view prog);
+[[nodiscard]] Args parseArgs(std::span<char*> argv);
+void printHelp(std::string_view prog);
 
 } // namespace cyka::cli

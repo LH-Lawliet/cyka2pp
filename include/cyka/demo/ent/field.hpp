@@ -32,14 +32,14 @@ struct FieldType {
     int count{0};
 };
 
-[[nodiscard]] std::unique_ptr<FieldType> parse_field_type(std::string_view name);
+[[nodiscard]] std::unique_ptr<FieldType> parseFieldType(std::string_view name);
 
 enum class FieldModel : std::uint8_t {
-    Simple,
-    FixedArray,
-    FixedTable,
-    VariableArray,
-    VariableTable
+    SIMPLE,
+    FIXED_ARRAY,
+    FIXED_TABLE,
+    VARIABLE_ARRAY,
+    VARIABLE_TABLE
 };
 
 /// Decoder plus whether this path updates a variable-length collection header.
@@ -67,15 +67,15 @@ struct EntField {
     std::vector<const EntSerializer*> poly_types;
     /// Slot in the per-entity `poly_serializers` slice; -1 if not polymorphic.
     int poly_serializer_id{-1};
-    FieldModel model{FieldModel::Simple};
+    FieldModel model{FieldModel::SIMPLE};
     DecoderSpec decoder;
     DecoderSpec base_decoder;
     DecoderSpec child_decoder;
 
-    void set_model(FieldModel m);
-    [[nodiscard]] DecodeSel select(const FieldPath& fp, int pos, PolyView poly = {}) const;
-    [[nodiscard]] bool path_for_name(FieldPath& fp, std::string_view name,
-                                     PolyView poly = {}) const;
+    void setModel(FieldModel model);
+    [[nodiscard]] DecodeSel select(const FieldPath& field_path, int pos, PolyView poly = {}) const;
+    [[nodiscard]] bool pathForName(
+        FieldPath& field_path, std::string_view name, PolyView poly = {}) const;
 };
 
 struct EntSerializer {
@@ -84,12 +84,12 @@ struct EntSerializer {
     std::vector<const EntField*> fields;
     std::unordered_map<std::string, std::size_t> index_by_name;
 
-    void add_field(const EntField* f);
-    [[nodiscard]] DecodeSel select(const FieldPath& fp, int pos, PolyView poly = {}) const;
-    [[nodiscard]] bool path_for_name(FieldPath& fp, std::string_view name,
-                                     PolyView poly = {}) const;
+    void addField(const EntField* field);
+    [[nodiscard]] DecodeSel select(const FieldPath& field_path, int pos, PolyView poly = {}) const;
+    [[nodiscard]] bool pathForName(
+        FieldPath& field_path, std::string_view name, PolyView poly = {}) const;
     /// Highest polymorphic serializer id reachable from this serializer, or -1.
-    [[nodiscard]] int max_poly_id() const;
+    [[nodiscard]] int maxPolyId() const;
 };
 
 struct EntClass {
@@ -101,15 +101,15 @@ struct EntClass {
     /// name → field-path key (nullopt = known-missing), memoised per class.
     mutable std::unordered_map<std::string, std::optional<std::uint64_t>> key_cache;
 
-    [[nodiscard]] std::optional<std::uint64_t> key_for(const std::string& name) const;
+    [[nodiscard]] std::optional<std::uint64_t> keyFor(const std::string& name) const;
 };
 
 /// Pick the decoder for a field, mirroring demoinfocs' findDecoder chain.
-[[nodiscard]] DecoderSpec find_decoder(const EntField& f);
-[[nodiscard]] DecoderSpec find_decoder_by_base(const EntField& f);
+[[nodiscard]] DecoderSpec findDecoder(const EntField& field);
+[[nodiscard]] DecoderSpec findDecoderByBase(const EntField& field);
 /// Types that are networked through a pointer indirection.
-[[nodiscard]] bool is_pointer_type(std::string_view base);
+[[nodiscard]] bool isPointerType(std::string_view base);
 /// Decimal index embedded in a property name segment (e.g. `0003`).
-[[nodiscard]] std::optional<std::int32_t> parse_path_index(std::string_view s);
+[[nodiscard]] std::optional<std::int32_t> parsePathIndex(std::string_view segment);
 
 } // namespace cyka::demo::ent

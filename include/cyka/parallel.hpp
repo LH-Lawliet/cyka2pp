@@ -2,54 +2,72 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cstdlib>
 #include <cstddef>
+#include <optional>
 #include <thread>
-#include <utility>
 #include <vector>
 
 namespace cyka {
 
-/// Dynamic work-stealing style loop over `[0, n)`. Sequential if `n` is tiny
-/// or `CYKA_THREADS=1`.
-template <class Fn>
-void parallel_for(std::size_t n, Fn&& fn) {
-    if (n == 0) {
+inline constexpr unsigned DEFAULT_HW_THREADS = 4;
+
+namespace detail {
+
+inline std::optional<unsigned>& parallelThreadOverride() {
+    static std::optional<unsigned> threads;
+    return threads;
+}
+
+} // namespace detail
+
+/// Optional process-wide thread budget override (set from CLI / main).
+inline void setParallelThreadOverride(std::optional<unsigned> threads) {
+    detail::parallelThreadOverride() = threads;
+}
+
+[[nodiscard]] inline unsigned threadBudget() noexcept {
+    unsigned hardware = std::thread::hardware_concurrency();
+    if (hardware == 0) {
+        hardware = DEFAULT_HW_THREADS;
+    }
+    if (const std::optional<unsigned>& override = detail::parallelThreadOverride();
+        override.has_value() && *override > 0) {
+        hardware = *override;
+    }
+    return hardware;
+}
+
+/// Dynamic work-stealing style loop over `[0, count)`. Sequential if `count` is tiny
+/// or thread override / budget is 1.
+template <class Callback>
+void parallelFor(std::size_t count, Callback callback) {
+    if (count == 0) {
         return;
     }
-    unsigned hw = std::thread::hardware_concurrency();
-    if (hw == 0) {
-        hw = 4;
-    }
-    if (const char* env = std::getenv("CYKA_THREADS")) {
-        const int thread_count = std::atoi(env);
-        if (thread_count > 0) {
-            hw = static_cast<unsigned>(thread_count);
-        }
-    }
-    if (n == 1 || hw == 1) {
-        for (std::size_t i = 0; i < n; ++i) {
-            fn(i);
+    const unsigned HARDWARE = threadBudget();
+    if (count == 1 || HARDWARE == 1) {
+        for (std::size_t idx = 0; idx < count; ++idx) {
+            callback(idx);
         }
         return;
     }
-    const unsigned workers = static_cast<unsigned>(std::min<std::size_t>(hw, n));
+    const unsigned WORKERS = static_cast<unsigned>(std::min<std::size_t>(HARDWARE, count));
     std::atomic<std::size_t> next{0};
     std::vector<std::thread> threads;
-    threads.reserve(workers);
-    for (unsigned t = 0; t < workers; ++t) {
+    threads.reserve(WORKERS);
+    for (unsigned worker = 0; worker < WORKERS; ++worker) {
         threads.emplace_back([&] {
             for (;;) {
-                const std::size_t i = next.fetch_add(1, std::memory_order_relaxed);
-                if (i >= n) {
+                const std::size_t INDEX = next.fetch_add(1, std::memory_order_relaxed);
+                if (INDEX >= count) {
                     break;
                 }
-                fn(i);
+                callback(INDEX);
             }
         });
     }
-    for (auto& th : threads) {
-        th.join();
+    for (auto& thread : threads) {
+        thread.join();
     }
 }
 

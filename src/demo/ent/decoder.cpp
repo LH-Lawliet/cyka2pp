@@ -3,131 +3,140 @@
 
 #include "cyka/demo/ent/decoder.hpp"
 
+#include "cyka/demo/ent/bit_floats.hpp"
+
 #include <bit>
 
 namespace cyka::demo::ent {
 namespace {
 
-float float_from_bits(std::uint32_t bits) noexcept {
+inline constexpr float SIM_TIME_SCALE = 1.0F / 64.0F;
+inline constexpr unsigned RUNE_TIME_BITS = 4U;
+inline constexpr unsigned VEC3_COMPS = 3U;
+inline constexpr unsigned ANGLE_PRECISE_BITS = 20U;
+inline constexpr float ANGLE_HALF_TURN = 180.0F;
+inline constexpr std::size_t VEC_X = 0;
+inline constexpr std::size_t VEC_Y = 1;
+inline constexpr std::size_t VEC_Z = 2;
+
+float floatFromBits(std::uint32_t bits) noexcept {
     return std::bit_cast<float>(bits);
 }
 
-float decode_scalar(DecOp op, const QuantizedFloat& qf, BitStream& r) noexcept {
-    switch (op) {
-    case DecOp::Coord:
-        return read_coord(r);
-    case DecOp::SimTime:
-        return static_cast<float>(r.read_var_u32()) * (1.0F / 64.0F);
-    case DecOp::RuneTime:
-        return float_from_bits(r.read_bits(4));
-    case DecOp::Quantized:
-        return qf.decode(r);
-    case DecOp::NoScale:
+float decodeScalar(DecOp dec_op, const QuantizedFloat& quant, BitStream& reader) noexcept {
+    switch (dec_op) {
+    case DecOp::COORD:
+        return readCoord(reader);
+    case DecOp::SIM_TIME:
+        return static_cast<float>(reader.readVarU32()) * SIM_TIME_SCALE;
+    case DecOp::RUNE_TIME:
+        return floatFromBits(reader.readBits(RUNE_TIME_BITS));
+    case DecOp::QUANTIZED:
+        return quant.decode(reader);
+    case DecOp::NO_SCALE:
     default: {
-        const std::uint32_t bits = r.read_le_u32();
-        return bits == 0 ? 0.0F : float_from_bits(bits);
+        const std::uint32_t BITS = reader.readLeU32();
+        return BITS == 0 ? 0.0F : floatFromBits(BITS);
     }
     }
 }
 
 } // namespace
 
-EntValue decode_value(const DecoderSpec& spec, BitStream& r) {
+EntValue decodeValue(const DecoderSpec& spec, BitStream& reader) {
     switch (spec.op) {
-    case DecOp::Bool:
-        return EntValue::of_bool(r.read_bool());
-    case DecOp::Signed:
-        return EntValue::of_int(r.read_var_i32());
-    case DecOp::Unsigned:
-        return EntValue::of_uint(r.read_var_u32());
-    case DecOp::Unsigned64:
-        return EntValue::of_uint(r.read_var_u64());
-    case DecOp::Fixed64:
-        return EntValue::of_uint(r.read_le_u64());
-    case DecOp::String:
-        return EntValue::of_str(r.read_string());
-    case DecOp::BinaryBlock: {
-        const std::uint32_t n = r.read_var_u32();
-        r.skip_bytes(n);
-        return EntValue::of_uint(n);
+    case DecOp::BOOL:
+        return EntValue::ofBool(reader.readBool());
+    case DecOp::SIGNED:
+        return EntValue::ofInt(reader.readVarI32());
+    case DecOp::UNSIGNED:
+        return EntValue::ofUint(reader.readVarU32());
+    case DecOp::UNSIGNED64:
+        return EntValue::ofUint(reader.readVarU64());
+    case DecOp::FIXED64:
+        return EntValue::ofUint(reader.readLeU64());
+    case DecOp::STRING:
+        return EntValue::ofStr(reader.readString());
+    case DecOp::BINARY_BLOCK: {
+        const std::uint32_t NUM = reader.readVarU32();
+        reader.skipBytes(NUM);
+        return EntValue::ofUint(NUM);
     }
-    case DecOp::Ammo: {
-        const std::uint32_t v = r.read_var_u32();
-        return EntValue::of_int(static_cast<std::int64_t>(v) - 1);
+    case DecOp::AMMO: {
+        const std::uint32_t VAL = reader.readVarU32();
+        return EntValue::ofInt(static_cast<std::int64_t>(VAL) - 1);
     }
-    case DecOp::Component:
-        return EntValue::of_uint(r.read_bits(1));
-    case DecOp::PolyBase: {
-        // Inactive pointer is a single false bit. The ubitvar type index is
-        // only present when the pointer is active (demoinfocs / Clarity).
-        if (!r.read_bool()) {
-            return EntValue::of_bool(false);
+    case DecOp::COMPONENT:
+        return EntValue::ofUint(reader.readBits(1));
+    case DecOp::POLY_BASE: {
+        if (!reader.readBool()) {
+            return EntValue::ofBool(false);
         }
-        EntValue v = EntValue::of_uint(r.read_ubit_var());
-        v.b = true;
-        return v;
+        EntValue val = EntValue::ofUint(reader.readUbitVar());
+        val.b = true;
+        return val;
     }
-    case DecOp::Vec3Normal:
-        return EntValue::of_vec3(read_3bit_normal(r));
-    case DecOp::Vector: {
-        std::array<float, 3> v{};
-        const unsigned comps = spec.comps == 0 ? 3U : spec.comps;
-        for (unsigned i = 0; i < comps; ++i) {
-            const float x = decode_scalar(spec.sub, spec.qf, r);
-            if (i < 3) {
-                v[i] = x;
+    case DecOp::VEC3_NORMAL:
+        return EntValue::ofVec3(read3bitNormal(reader));
+    case DecOp::VECTOR: {
+        std::array<float, VEC3_COMPS> vec{};
+        const unsigned COMPS = spec.comps == 0 ? VEC3_COMPS : spec.comps;
+        for (unsigned idx = 0; idx < COMPS; ++idx) {
+            const float COMP = decodeScalar(spec.sub, spec.qf, reader);
+            if (idx < VEC3_COMPS) {
+                vec[idx] = COMP;
             }
         }
-        return EntValue::of_vec3(v);
+        return EntValue::ofVec3(vec);
     }
-    case DecOp::QAngleBits: {
-        std::array<float, 3> v{};
-        for (auto& c : v) {
-            c = read_angle(r, spec.bits);
+    case DecOp::Q_ANGLE_BITS: {
+        std::array<float, VEC3_COMPS> vec{};
+        for (auto& comp : vec) {
+            comp = readAngle(reader, spec.bits);
         }
-        return EntValue::of_vec3(v);
+        return EntValue::ofVec3(vec);
     }
-    case DecOp::QAnglePrecise: {
-        std::array<float, 3> v{};
-        const bool has_x = r.read_bool();
-        const bool has_y = r.read_bool();
-        const bool has_z = r.read_bool();
-        if (has_x) {
-            v[0] = read_angle(r, 20) - 180.0F;
+    case DecOp::Q_ANGLE_PRECISE: {
+        std::array<float, VEC3_COMPS> vec{};
+        const bool HAS_X = reader.readBool();
+        const bool HAS_Y = reader.readBool();
+        const bool HAS_Z = reader.readBool();
+        if (HAS_X) {
+            vec[VEC_X] = readAngle(reader, ANGLE_PRECISE_BITS) - ANGLE_HALF_TURN;
         }
-        if (has_y) {
-            v[1] = read_angle(r, 20) - 180.0F;
+        if (HAS_Y) {
+            vec[VEC_Y] = readAngle(reader, ANGLE_PRECISE_BITS) - ANGLE_HALF_TURN;
         }
-        if (has_z) {
-            v[2] = read_angle(r, 20) - 180.0F;
+        if (HAS_Z) {
+            vec[VEC_Z] = readAngle(reader, ANGLE_PRECISE_BITS) - ANGLE_HALF_TURN;
         }
-        return EntValue::of_vec3(v);
+        return EntValue::ofVec3(vec);
     }
-    case DecOp::QAngleCoord: {
-        std::array<float, 3> v{};
-        const bool has_x = r.read_bool();
-        const bool has_y = r.read_bool();
-        const bool has_z = r.read_bool();
-        if (has_x) {
-            v[0] = read_coord(r);
+    case DecOp::Q_ANGLE_COORD: {
+        std::array<float, VEC3_COMPS> vec{};
+        const bool HAS_X = reader.readBool();
+        const bool HAS_Y = reader.readBool();
+        const bool HAS_Z = reader.readBool();
+        if (HAS_X) {
+            vec[VEC_X] = readCoord(reader);
         }
-        if (has_y) {
-            v[1] = read_coord(r);
+        if (HAS_Y) {
+            vec[VEC_Y] = readCoord(reader);
         }
-        if (has_z) {
-            v[2] = read_coord(r);
+        if (HAS_Z) {
+            vec[VEC_Z] = readCoord(reader);
         }
-        return EntValue::of_vec3(v);
+        return EntValue::ofVec3(vec);
     }
-    case DecOp::NoScale:
-    case DecOp::Coord:
-    case DecOp::SimTime:
-    case DecOp::RuneTime:
-    case DecOp::Quantized:
-        return EntValue::of_float(decode_scalar(spec.op, spec.qf, r));
-    case DecOp::Default:
+    case DecOp::NO_SCALE:
+    case DecOp::COORD:
+    case DecOp::SIM_TIME:
+    case DecOp::RUNE_TIME:
+    case DecOp::QUANTIZED:
+        return EntValue::ofFloat(decodeScalar(spec.op, spec.qf, reader));
+    case DecOp::DEFAULT:
     default:
-        return EntValue::of_uint(r.read_var_u32());
+        return EntValue::ofUint(reader.readVarU32());
     }
 }
 

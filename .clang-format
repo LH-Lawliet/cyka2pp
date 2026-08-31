@@ -1,10 +1,53 @@
 BasedOnStyle: LLVM
-IndentWidth: 4
-ColumnLimit: 100
-SortIncludes: true
-PointerAlignment: Left
-AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: Never
-BreakBeforeBraces: Attach
-SpaceBeforeParens: ControlStatements
 Standard: Latest
+ColumnLimit: 100
+IndentWidth: 4
+IndentPPDirectives: None
+PointerAlignment: Left
+ReferenceAlignment: Left
+QualifierAlignment: Left
+SortIncludes: true
+IncludeBlocks: Regroup
+FixNamespaceComments: true
+
+BreakTemplateDeclarations: Yes
+BreakBeforeConceptDeclarations: Always
+BreakInheritanceList: AfterColon
+IndentRequires: true
+RequiresClausePosition: OwnLine
+PackConstructorInitializers: Never
+IndentWrappedFunctionNames: true
+
+AlignConsecutiveAssignments: None
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+AlignArrayOfStructures: Left
+AlignEscapedNewlines: LeftWithLastLine
+AlignOperands: AlignAfterOperator
+AlignAfterOpenBracket: Align
+AlignTrailingComments: Leave
+
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortBlocksOnASingleLine: Never
+BinPackParameters: OnePerLine
+BinPackArguments: false
+PenaltyReturnTypeOnItsOwnLine: 1000
+PenaltyIndentedWhitespace: 2
+
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: Always
+IndentAccessModifiers: false
+AccessModifierOffset: -2
+
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+  AtStartOfFile: false
+MaxEmptyLinesToKeep: 1
+SpacesInAngles: Never
+SpacesInSquareBrackets: false
+InsertTrailingCommas: Wrapped
+InsertBraces: true

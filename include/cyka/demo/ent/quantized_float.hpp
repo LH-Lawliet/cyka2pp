@@ -10,10 +10,10 @@
 
 namespace cyka::demo::ent {
 
-inline constexpr std::uint32_t kQffRoundDown = 1U << 0;
-inline constexpr std::uint32_t kQffRoundUp = 1U << 1;
-inline constexpr std::uint32_t kQffEncodeZero = 1U << 2;
-inline constexpr std::uint32_t kQffEncodeIntegers = 1U << 3;
+inline constexpr std::uint32_t QFF_ROUND_DOWN = 0x01U;
+inline constexpr std::uint32_t QFF_ROUND_UP = 0x02U;
+inline constexpr std::uint32_t QFF_ENCODE_ZERO = 0x04U;
+inline constexpr std::uint32_t QFF_ENCODE_INTEGERS = 0x08U;
 
 /// Precomputed quantized-float decoder for one send-table field.
 struct QuantizedFloat {
@@ -26,12 +26,13 @@ struct QuantizedFloat {
     std::uint32_t flags{0};
     bool no_scale{false};
 
-    [[nodiscard]] float decode(BitStream& r) const noexcept;
+    [[nodiscard]] float decode(BitStream& reader) const noexcept;
 };
 
-[[nodiscard]] QuantizedFloat make_quantized_float(std::int32_t bit_count,
-                                                  std::optional<std::int32_t> flags,
-                                                  std::optional<float> low_value,
-                                                  std::optional<float> high_value);
+[[nodiscard]] QuantizedFloat makeQuantizedFloat(
+    std::int32_t bit_count,
+    std::optional<std::int32_t> flags,
+    std::optional<float> low_value,
+    std::optional<float> high_value);
 
 } // namespace cyka::demo::ent

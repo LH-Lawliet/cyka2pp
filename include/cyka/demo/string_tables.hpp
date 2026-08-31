@@ -21,6 +21,6 @@ using UserInfoById = std::unordered_map<std::int32_t, UserInfo>;
 
 /// Parse CDemoStringTables / FullPacket.string_table for userinfo entries.
 /// Indexes by slot+1 (event userid), raw userid, and userid&0xff.
-void ingest_string_tables(std::span<const std::uint8_t> body, UserInfoById& users);
+void ingestStringTables(std::span<const std::uint8_t> body, UserInfoById& users);
 
 } // namespace cyka::demo

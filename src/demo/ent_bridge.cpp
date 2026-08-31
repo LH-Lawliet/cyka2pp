@@ -9,76 +9,88 @@
 #include <string>
 
 namespace cyka::demo {
+namespace {
 
-void EntityBridge::on_frame(DemoCommand cmd, std::span<const std::uint8_t> payload) {
+inline constexpr int PROTO_FIELD_STRING_TABLES = 1;
+inline constexpr int PROTO_FIELD_TABLE_ID = 1;
+
+} // namespace
+
+void EntityBridge::onFrame(DemoCommand cmd, std::span<const std::uint8_t> payload) {
     switch (cmd) {
-    case DemoCommand::SendTables:
-        ctx_.on_send_tables(payload);
+    case DemoCommand::SEND_TABLES:
+        ctx.onSendTables(payload);
         break;
-    case DemoCommand::ClassInfo:
-        ctx_.on_demo_class_info(payload);
+    case DemoCommand::CLASS_INFO:
+        ctx.onDemoClassInfo(payload);
         break;
-    case DemoCommand::StringTables:
-        ent::ingest_baseline_tables(payload, ctx_);
+    case DemoCommand::STRING_TABLES:
+        ent::ingestBaselineTables(payload, ctx);
         break;
-    case DemoCommand::FullPacket:
-        // DEM_FullPacket.string_table is a CDemoStringTables submessage.
-        ent::ingest_baseline_tables(find_bytes_field(payload, 1), ctx_);
+    case DemoCommand::FULL_PACKET:
+        ent::ingestBaselineTables(findBytesField(payload, PROTO_FIELD_STRING_TABLES), ctx);
         break;
     default:
         break;
     }
 }
 
-void EntityBridge::on_net_msg(const NetMessage& nm) {
-    switch (nm.type) {
-    case kMsgServerInfo:
-        ctx_.on_server_info(nm.payload);
+void EntityBridge::onNetMsg(const NetMessage& net_msg) {
+    switch (net_msg.type) {
+    case MSG_SERVER_INFO:
+        ctx.onServerInfo(net_msg.payload);
         break;
-    case kMsgFlattenedSerializer:
-        ctx_.on_flattened_serializer(nm.payload);
+    case MSG_FLATTENED_SERIALIZER:
+        ctx.onFlattenedSerializer(net_msg.payload);
         break;
-    case kMsgClassInfo:
-        ctx_.on_svc_class_info(nm.payload);
+    case MSG_CLASS_INFO:
+        ctx.onSvcClassInfo(net_msg.payload);
         break;
-    case kMsgCreateStringTable: {
-        const std::int32_t id = next_table_id_++;
-        if (ent::on_create_string_table(nm.payload, ctx_) == "instancebaseline") {
-            baseline_table_ids_.push_back(id);
+    case MSG_CREATE_STRING_TABLE: {
+        const std::int32_t TABLE_ID = next_table_id++;
+        if (ent::onCreateStringTable(net_msg.payload, ctx) == "instancebaseline") {
+            baseline_table_ids.push_back(TABLE_ID);
         }
         break;
     }
-    case kMsgUpdateStringTable: {
+    case MSG_UPDATE_STRING_TABLE: {
         std::int32_t table_id = 0;
-        ByteReader r(nm.payload);
-        while (auto f = read_field(r)) {
-            if (f->field == 1 && f->wire == kWireVarint) {
-                table_id = static_cast<std::int32_t>(f->varint);
+        ByteReader reader(net_msg.payload);
+        while (auto field = readField(reader)) {
+            if (field->field == PROTO_FIELD_TABLE_ID && field->wire == WIRE_VARINT) {
+                table_id = static_cast<std::int32_t>(field->varint);
             }
         }
-        if (std::ranges::find(baseline_table_ids_, table_id) != baseline_table_ids_.end()) {
-            ent::on_update_string_table(nm.payload, ctx_);
+        if (std::ranges::find(baseline_table_ids, table_id) != baseline_table_ids.end()) {
+            ent::onUpdateStringTable(net_msg.payload, ctx);
         }
         break;
     }
-    case kMsgPacketEntities:
-        (void)ctx_.on_packet_entities(nm.payload);
+    case MSG_PACKET_ENTITIES:
+        (void)ctx.onPacketEntities(net_msg.payload);
         break;
     default:
         break;
     }
 }
 
-void EntityBridge::publish_players() {
-    sampler_.collect_players(ctx_, idents_);
-    for (const auto& id : idents_) {
-        listener_.observe_entity_player(std::to_string(id.steam_id), id.name, id.team_num, id.mvp_count,
-                                        id.rank_type, id.ranking, id.competitive_wins);
+void EntityBridge::publishPlayers() {
+    ent::PoseSampler::collectPlayers(ctx, idents);
+    for (const auto& ident : idents) {
+        listener->observeEntityPlayer({
+            .steam = std::to_string(ident.steam_id),
+            .name = ident.name,
+            .team = ident.team_num,
+            .mvp_count = ident.mvp_count,
+            .rank_type = ident.rank_type,
+            .ranking = ident.ranking,
+            .competitive_wins = ident.competitive_wins,
+        });
     }
 }
 
-bool EntityBridge::fill_shot_aim(const SteamId& steam, RawShot& shot) {
-    if (steam.empty() || !ctx_.ready()) {
+bool EntityBridge::fillShotAim(const SteamId& steam, RawShot& shot) {
+    if (steam.empty() || !ctx.ready()) {
         return false;
     }
     ent::PoseSample pose;
@@ -88,21 +100,21 @@ bool EntityBridge::fill_shot_aim(const SteamId& steam, RawShot& shot) {
     } catch (...) {
         return false;
     }
-    if (!sampler_.pose_for(ctx_, sid, pose)) {
+    if (!ent::PoseSampler::poseFor(ctx, sid, pose)) {
         return false;
     }
     shot.pitch = pose.pitch;
     shot.yaw = pose.yaw;
-    shot.x = pose.x;
-    shot.y = pose.y;
-    shot.z = pose.z;
+    shot.pos_x = pose.pos_x;
+    shot.pos_y = pose.pos_y;
+    shot.pos_z = pose.pos_z;
     shot.scoped = pose.scoped;
     shot.has_aim = true;
     return true;
 }
 
-int EntityBridge::health_of(const SteamId& steam) {
-    if (steam.empty() || !ctx_.ready()) {
+int EntityBridge::healthOf(const SteamId& steam) {
+    if (steam.empty() || !ctx.ready()) {
         return -1;
     }
     ent::PoseSample pose;
@@ -112,61 +124,64 @@ int EntityBridge::health_of(const SteamId& steam) {
     } catch (...) {
         return -1;
     }
-    if (!sampler_.pose_for(ctx_, sid, pose)) {
+    if (!ent::PoseSampler::poseFor(ctx, sid, pose)) {
         return -1;
     }
     return pose.health;
 }
 
-void EntityBridge::publish_game_rules(Tick tick) {
-    for (ent::Entity* e : ctx_.tracked()) {
-        if (e == nullptr || e->cls() == nullptr || e->cls()->name != "CCSGameRulesProxy") {
+void EntityBridge::publishGameRules(Tick tick) {
+    for (const ent::Entity* ent : ctx.tracked()) {
+        if (ent == nullptr || ent->cls() == nullptr || ent->cls()->name != "CCSGameRulesProxy") {
             continue;
         }
-        const auto reason = e->prop("m_pGameRules.m_eRoundWinReason");
-        const auto status = e->prop("m_pGameRules.m_iRoundWinStatus");
-        const auto played = e->prop("m_pGameRules.m_totalRoundsPlayed");
-        const auto phase = e->prop("m_pGameRules.m_gamePhase");
-        listener_.on_game_rules(tick, reason != nullptr ? static_cast<int>(reason->as_i64()) : 0,
-                                status != nullptr ? static_cast<int>(status->as_i64()) : 0,
-                                played != nullptr ? static_cast<int>(played->as_i64()) : 0,
-                                phase != nullptr ? static_cast<int>(phase->as_i64()) : 0);
+        const auto* const REASON = ent->prop("m_pGameRules.m_eRoundWinReason");
+        const auto* const STATUS = ent->prop("m_pGameRules.m_iRoundWinStatus");
+        const auto* const PLAYED = ent->prop("m_pGameRules.m_totalRoundsPlayed");
+        const auto* const PHASE = ent->prop("m_pGameRules.m_gamePhase");
+        listener->onGameRules({
+            .tick = tick,
+            .win_reason = REASON != nullptr ? static_cast<int>(REASON->asI64()) : 0,
+            .win_status = STATUS != nullptr ? static_cast<int>(STATUS->asI64()) : 0,
+            .rounds_played = PLAYED != nullptr ? static_cast<int>(PLAYED->asI64()) : 0,
+            .game_phase = PHASE != nullptr ? static_cast<int>(PHASE->asI64()) : 0,
+        });
         return;
     }
 }
 
-void EntityBridge::after_packet(Tick tick) {
-    if (!ctx_.ready()) {
+void EntityBridge::afterPacket(Tick tick) {
+    if (!ctx.ready()) {
         return;
     }
-    publish_game_rules(tick);
-    if (!sampler_.due(tick)) {
+    publishGameRules(tick);
+    if (!sampler.due(tick)) {
         return;
     }
-    sampler_.mark(tick);
-    publish_players();
+    sampler.mark(tick);
+    publishPlayers();
 
-    if (!listener_.round_live() || listener_.round_number() <= 0) {
+    if (!listener->roundLive() || listener->roundNumber() <= 0) {
         return;
     }
-    sampler_.collect_poses(ctx_, poses_);
-    for (const auto& p : poses_) {
+    ent::PoseSampler::collectPoses(ctx, poses);
+    for (const auto& pose : poses) {
         RawPose out;
         out.tick = tick;
-        out.round_number = listener_.round_number();
-        out.steam_id = std::to_string(p.steam_id);
-        out.team_letter = listener_.team_letter(p.team_num);
-        out.team_num = p.team_num;
-        out.x = p.x;
-        out.y = p.y;
-        out.z = p.z;
-        out.pitch = p.pitch;
-        out.yaw = p.yaw;
-        out.health = p.health;
-        out.scoped = p.scoped;
-        out.airborne = p.airborne;
-        out.duck_amount = p.duck_amount;
-        listener_.add_pose(std::move(out));
+        out.round_number = listener->roundNumber();
+        out.steam_id = std::to_string(pose.steam_id);
+        out.team_letter = listener->teamLetter(pose.team_num);
+        out.team_num = pose.team_num;
+        out.pos_x = pose.pos_x;
+        out.pos_y = pose.pos_y;
+        out.pos_z = pose.pos_z;
+        out.pitch = pose.pitch;
+        out.yaw = pose.yaw;
+        out.health = pose.health;
+        out.scoped = pose.scoped;
+        out.airborne = pose.airborne;
+        out.duck_amount = pose.duck_amount;
+        listener->addPose(std::move(out));
     }
 }
 

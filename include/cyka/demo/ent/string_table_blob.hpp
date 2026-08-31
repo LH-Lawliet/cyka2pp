@@ -22,15 +22,16 @@ struct StringTableSpec {
     std::span<const std::uint8_t> string_data;
 };
 
-using StringTableEntryFn = std::function<void(const std::string& key,
-                                             std::vector<std::uint8_t>&& value)>;
+using StringTableEntryFn =
+    std::function<void(const std::string& key, std::vector<std::uint8_t>&& value)>;
 
 /// Walk the bit-packed entry list, invoking `on_entry` for keyed entries that
 /// carry user data. Stops silently at the first malformed entry.
-void parse_string_table_blob(const StringTableSpec& spec, std::span<const std::uint8_t> data,
-                             const StringTableEntryFn& on_entry);
+void parseStringTableBlob(const StringTableSpec& spec,
+                          std::span<const std::uint8_t> data,
+                          const StringTableEntryFn& on_entry);
 
 /// As above, snappy-decompressing `spec.string_data` first when flagged.
-void parse_string_table(const StringTableSpec& spec, const StringTableEntryFn& on_entry);
+void parseStringTable(const StringTableSpec& spec, const StringTableEntryFn& on_entry);
 
 } // namespace cyka::demo::ent

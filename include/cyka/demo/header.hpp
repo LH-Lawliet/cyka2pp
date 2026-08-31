@@ -1,7 +1,5 @@
 #pragma once
 
-#include "cyka/error.hpp"
-
 #include <cstdint>
 #include <span>
 #include <string>
@@ -23,7 +21,7 @@ struct FileInfoMeta {
     std::int32_t playback_frames{0};
 };
 
-[[nodiscard]] FileHeaderInfo parse_file_header(std::span<const std::uint8_t> payload);
-[[nodiscard]] FileInfoMeta parse_file_info(std::span<const std::uint8_t> payload);
+[[nodiscard]] FileHeaderInfo parseFileHeader(std::span<const std::uint8_t> payload);
+[[nodiscard]] FileInfoMeta parseFileInfo(std::span<const std::uint8_t> payload);
 
 } // namespace cyka::demo

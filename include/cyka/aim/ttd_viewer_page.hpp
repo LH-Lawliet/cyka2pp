@@ -4,7 +4,7 @@
 
 namespace cyka::aim {
 
-inline constexpr std::string_view kTtdViewerCss = R"css(
+inline constexpr std::string_view TTD_VIEWER_CSS = R"css(
 :root { --bg:#121212; --fg:#eee; --muted:#9aa; --accent:#6cf; }
 * { box-sizing:border-box; }
 html,body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif; }
@@ -55,7 +55,7 @@ h2 { font-size:1.1rem; margin:0 0 .35rem; }
 .ov-bar .meta { min-width:12rem; text-align:center; }
 )css";
 
-inline constexpr std::string_view kTtdViewerJs = R"js(
+inline constexpr std::string_view TTD_VIEWER_JS = R"js(
 (function () {
   const ov = document.getElementById("ttd-ov");
   const ovImg = document.getElementById("ttd-ov-img");
@@ -115,7 +115,7 @@ inline constexpr std::string_view kTtdViewerJs = R"js(
       show();
     }, speedSec() * 1000);
   }
-  function openAt(card, i) {
+  function openAt(card, idx) {
     strip = thumbs(card);
     idx = Math.max(0, Math.min(i, strip.length - 1));
     cardSpeed = card.querySelector(".card-speed");
@@ -134,8 +134,8 @@ inline constexpr std::string_view kTtdViewerJs = R"js(
   }
 
   document.querySelectorAll(".card").forEach(function (card) {
-    thumbs(card).forEach(function (th, i) {
-      th.addEventListener("click", function () { openAt(card, i); });
+    thumbs(card).forEach(function (th, idx) {
+      th.addEventListener("click", function () { openAt(card, idx); });
     });
     const playBtn = card.querySelector(".card-play");
     const spd = card.querySelector(".card-speed");

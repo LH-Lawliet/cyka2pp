@@ -2,7 +2,6 @@
 // sendtables/sendtablescs2/parser.go. See NOTICE.
 
 #include "cyka/demo/ent/context.hpp"
-
 #include "cyka/demo/proto_wire.hpp"
 
 #include <cmath>
@@ -11,99 +10,110 @@ namespace cyka::demo::ent {
 namespace {
 
 using cyka::demo::ByteReader;
-using cyka::demo::kWireLen;
-using cyka::demo::kWireVarint;
+using cyka::demo::WIRE_LEN;
+using cyka::demo::WIRE_VARINT;
+
+inline constexpr int PROTO_FIELD_SEND_TABLES = 1;
+inline constexpr int PROTO_FIELD_CLASS_ID_BITS = 11;
+inline constexpr int PROTO_FIELD_CLASS_LIST = 1;
+inline constexpr int PROTO_FIELD_CLASS_ID = 1;
+inline constexpr int PROTO_FIELD_CLASS_NAME = 2;
+inline constexpr int PROTO_FIELD_SVC_CLASS_LIST = 2;
+inline constexpr int PROTO_FIELD_SVC_CLASS_NAME = 3;
 
 } // namespace
 
-const EntSerializer* EntityContext::serializer_for(const std::string& name) const {
-    const auto it = serializers_.find(name);
-    return it == serializers_.end() ? nullptr : it->second;
-}
-
-void EntityContext::bind_poly_count(EntClass* cls) {
+void bindPolyCount(EntClass* cls) {
     if (cls == nullptr || cls->serializer == nullptr) {
         return;
     }
-    const int m = cls->serializer->max_poly_id();
-    cls->poly_count = m >= 0 ? m + 1 : 0;
+    const int MAX_POLY = cls->serializer->maxPolyId();
+    cls->poly_count = MAX_POLY >= 0 ? MAX_POLY + 1 : 0;
 }
 
-void EntityContext::on_send_tables(std::span<const std::uint8_t> body) {
-    const auto data = cyka::demo::find_bytes_field(body, 1);
-    if (data.empty()) {
+const EntSerializer* EntityContext::serializerFor(const std::string& name) const {
+    const auto ITER = serializers.find(name);
+    return ITER == serializers.end() ? nullptr : ITER->second;
+}
+
+void EntityContext::onSendTables(std::span<const std::uint8_t> body) {
+    const auto DATA = cyka::demo::findBytesField(body, PROTO_FIELD_SEND_TABLES);
+    if (DATA.empty()) {
         return;
     }
-    ByteReader r(data);
-    const auto len = r.read_varint_u32();
-    if (!len) {
+    ByteReader reader(DATA);
+    const auto LEN = reader.readVarintU32();
+    if (!LEN) {
         return;
     }
-    if (auto payload = r.read_bytes(*len)) {
-        load_flattened(*payload);
+    if (auto payload = reader.readBytes(*LEN)) {
+        loadFlattened(*payload);
     }
 }
 
-void EntityContext::on_flattened_serializer(std::span<const std::uint8_t> msg) {
-    load_flattened(msg);
+void EntityContext::onFlattenedSerializer(std::span<const std::uint8_t> msg) {
+    loadFlattened(msg);
 }
 
-void EntityContext::on_server_info(std::span<const std::uint8_t> msg) {
-    ByteReader r(msg);
-    while (auto f = cyka::demo::read_field(r)) {
-        if (f->field == 11 && f->wire == kWireVarint && f->varint > 1) {
-            class_id_bits_ =
-                static_cast<std::uint32_t>(std::log2(static_cast<double>(f->varint))) + 1;
+void EntityContext::onServerInfo(std::span<const std::uint8_t> msg) {
+    ByteReader reader(msg);
+    while (auto field = cyka::demo::readField(reader)) {
+        if (field->field == PROTO_FIELD_CLASS_ID_BITS && field->wire == WIRE_VARINT &&
+            field->varint > 1) {
+            class_id_bits =
+                static_cast<std::uint32_t>(std::log2(static_cast<double>(field->varint))) + 1;
         }
     }
 }
 
-void EntityContext::register_class(std::int32_t class_id, std::string name) {
+void EntityContext::registerClass(std::int32_t class_id, std::string name) {
     auto cls = std::make_unique<EntClass>();
     cls->class_id = class_id;
     cls->name = std::move(name);
-    cls->serializer = serializer_for(cls->name);
-    bind_poly_count(cls.get());
+    cls->serializer = serializerFor(cls->name);
+    bindPolyCount(cls.get());
     EntClass* raw = cls.get();
-    class_pool_.push_back(std::move(cls));
-    classes_by_id_[class_id] = raw;
-    classes_by_name_[raw->name] = raw;
+    class_pool.push_back(std::move(cls));
+    classes_by_id[class_id] = raw;
+    classes_by_name[raw->name] = raw;
 }
 
-void EntityContext::on_demo_class_info(std::span<const std::uint8_t> body) {
-    cyka::demo::for_each_message(body, 1, [&](std::span<const std::uint8_t> c) {
-        std::int32_t id = 0;
-        std::string name;
-        ByteReader r(c);
-        while (auto f = cyka::demo::read_field(r)) {
-            if (f->field == 1 && f->wire == kWireVarint) {
-                id = static_cast<std::int32_t>(f->varint);
-            } else if (f->field == 2 && f->wire == kWireLen) {
-                name = std::string{cyka::demo::as_string(f->bytes)};
+void EntityContext::onDemoClassInfo(std::span<const std::uint8_t> body) {
+    cyka::demo::forEachMessage(
+        body, PROTO_FIELD_CLASS_LIST, [&](std::span<const std::uint8_t> cls_msg) {
+            std::int32_t class_id = 0;
+            std::string name;
+            ByteReader reader(cls_msg);
+            while (auto field = cyka::demo::readField(reader)) {
+                if (field->field == PROTO_FIELD_CLASS_ID && field->wire == WIRE_VARINT) {
+                    class_id = static_cast<std::int32_t>(field->varint);
+                } else if (field->field == PROTO_FIELD_CLASS_NAME && field->wire == WIRE_LEN) {
+                    name = std::string{cyka::demo::asString(field->bytes)};
+                }
             }
-        }
-        if (!name.empty()) {
-            register_class(id, std::move(name));
-        }
-    });
+            if (!name.empty()) {
+                registerClass(class_id, std::move(name));
+            }
+        });
 }
 
-void EntityContext::on_svc_class_info(std::span<const std::uint8_t> msg) {
-    cyka::demo::for_each_message(msg, 2, [&](std::span<const std::uint8_t> c) {
-        std::int32_t id = 0;
-        std::string name;
-        ByteReader r(c);
-        while (auto f = cyka::demo::read_field(r)) {
-            if (f->field == 1 && f->wire == kWireVarint) {
-                id = static_cast<std::int32_t>(f->varint);
-            } else if (f->field == 3 && f->wire == kWireLen) {
-                name = std::string{cyka::demo::as_string(f->bytes)};
+void EntityContext::onSvcClassInfo(std::span<const std::uint8_t> msg) {
+    cyka::demo::forEachMessage(
+        msg, PROTO_FIELD_SVC_CLASS_LIST, [&](std::span<const std::uint8_t> cls_msg) {
+            std::int32_t class_id = 0;
+            std::string name;
+            ByteReader reader(cls_msg);
+            while (auto field = cyka::demo::readField(reader)) {
+                if (field->field == PROTO_FIELD_CLASS_ID && field->wire == WIRE_VARINT) {
+                    class_id = static_cast<std::int32_t>(field->varint);
+                } else if (field->field == PROTO_FIELD_SVC_CLASS_NAME && field->wire == WIRE_LEN) {
+                    name = std::string{cyka::demo::asString(field->bytes)};
+                }
             }
-        }
-        if (!name.empty() && !classes_by_id_.contains(id)) {
-            register_class(id, std::move(name));
-        }
-    });
+            if (!name.empty() && !classes_by_id.contains(class_id)) {
+                registerClass(class_id, std::move(name));
+            }
+        });
 }
 
 } // namespace cyka::demo::ent

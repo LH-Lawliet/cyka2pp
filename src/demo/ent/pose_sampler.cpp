@@ -8,193 +8,208 @@
 namespace cyka::demo::ent {
 namespace {
 
-const std::string kCellX = "CBodyComponent.m_cellX";
-const std::string kCellY = "CBodyComponent.m_cellY";
-const std::string kCellZ = "CBodyComponent.m_cellZ";
-const std::string kVecX = "CBodyComponent.m_vecX";
-const std::string kVecY = "CBodyComponent.m_vecY";
-const std::string kVecZ = "CBodyComponent.m_vecZ";
+inline constexpr int TEAM_T = 2;
+inline constexpr int TEAM_CT = 3;
+inline constexpr int CELL_BITS = 9;
+inline constexpr double MAX_COORD_INT = 16384.0;
+inline constexpr std::size_t PITCH_IDX = 0;
+inline constexpr std::size_t YAW_IDX = 1;
+inline constexpr float DUCKING_MIN = 0.85F;
+inline constexpr std::uint64_t FL_DUCKING = 1ULL << 1U;
 
-const std::string kSteamId = "m_steamID";
-const std::string kPlayerName = "m_iszPlayerName";
-const std::string kTeamNum = "m_iTeamNum";
-const std::string kPlayerPawn = "m_hPlayerPawn";
-const std::string kConnected = "m_iConnected";
-const std::string kMvps = "m_iMVPs";
-const std::string kRankType = "m_iCompetitiveRankType";
-const std::string kRanking = "m_iCompetitiveRanking";
-const std::string kCompWins = "m_iCompetitiveWins";
+const std::string CELL_X = "CBodyComponent.m_cellX";
+const std::string CELL_Y = "CBodyComponent.m_cellY";
+const std::string CELL_Z = "CBodyComponent.m_cellZ";
+const std::string VEC_X = "CBodyComponent.m_vecX";
+const std::string VEC_Y = "CBodyComponent.m_vecY";
+const std::string VEC_Z = "CBodyComponent.m_vecZ";
 
-const std::string kEyeAngles = "m_angEyeAngles";
-const std::string kHealth = "m_iHealth";
-const std::string kIsScoped = "m_bIsScoped";
-const std::string kLifeState = "m_lifeState";
-const std::string kGroundEntity = "m_hGroundEntity";
-// demoinfocs-golang / CS2 networked duck (MovementServices on the pawn).
-const std::string kDuckAmount = "m_pMovementServices.m_flDuckAmount";
-const std::string kDucked = "m_pMovementServices.m_bDucked";
-const std::string kDucking = "m_pMovementServices.m_bDucking";
-const std::string kFlags = "m_fFlags";
+const std::string STEAM_ID = "m_steamID";
+const std::string PLAYER_NAME = "m_iszPlayerName";
+const std::string TEAM_NUM = "m_iTeamNum";
+const std::string PLAYER_PAWN = "m_hPlayerPawn";
+const std::string CONNECTED = "m_iConnected";
+const std::string MVPS = "m_iMVPs";
+const std::string RANK_TYPE = "m_iCompetitiveRankType";
+const std::string RANKING = "m_iCompetitiveRanking";
+const std::string COMP_WINS = "m_iCompetitiveWins";
+
+const std::string EYE_ANGLES = "m_angEyeAngles";
+const std::string HEALTH = "m_iHealth";
+const std::string IS_SCOPED = "m_bIsScoped";
+const std::string LIFE_STATE = "m_lifeState";
+const std::string GROUND_ENTITY = "m_hGroundEntity";
+const std::string DUCK_AMOUNT = "m_pMovementServices.m_flDuckAmount";
+const std::string DUCKED = "m_pMovementServices.m_bDucked";
+const std::string DUCKING = "m_pMovementServices.m_bDucking";
+const std::string FLAGS = "m_fFlags";
 
 /// Source 2 splits world coordinates into a 9-bit cell index plus an offset.
-double coord_from_cell(std::uint64_t cell, float offset) {
-    constexpr int kCellBits = 9;
-    constexpr double kMaxCoordInt = 16384.0;
-    return (static_cast<double>(cell) * static_cast<double>(1 << kCellBits) - kMaxCoordInt) +
+double coordFromCell(std::uint64_t cell, float offset) {
+    return ((static_cast<double>(cell) *
+             static_cast<double>(1U << static_cast<unsigned>(CELL_BITS))) -
+            MAX_COORD_INT) +
            static_cast<double>(offset);
 }
 
-bool is_controller(const Entity& e) {
-    return e.cls() != nullptr && e.cls()->name == "CCSPlayerController";
+bool isController(const Entity& ent) {
+    return ent.cls() != nullptr && ent.cls()->name == "CCSPlayerController";
 }
 
-bool read_position(const Entity& pawn, double& x, double& y, double& z) {
-    const auto* cx = pawn.prop(kCellX);
-    const auto* cy = pawn.prop(kCellY);
-    const auto* cz = pawn.prop(kCellZ);
-    const auto* ox = pawn.prop(kVecX);
-    const auto* oy = pawn.prop(kVecY);
-    const auto* oz = pawn.prop(kVecZ);
-    if (cx == nullptr || cy == nullptr || cz == nullptr || ox == nullptr || oy == nullptr ||
-        oz == nullptr) {
+struct ReadPosition {
+    const Entity* pawn;
+    double* pos_x;
+    double* pos_y;
+    double* pos_z;
+};
+
+bool readPosition(const ReadPosition& query) {
+    const auto* cell_x = query.pawn->prop(CELL_X);
+    const auto* cell_y = query.pawn->prop(CELL_Y);
+    const auto* cell_z = query.pawn->prop(CELL_Z);
+    const auto* vec_x = query.pawn->prop(VEC_X);
+    const auto* vec_y = query.pawn->prop(VEC_Y);
+    const auto* vec_z = query.pawn->prop(VEC_Z);
+    if (cell_x == nullptr || cell_y == nullptr || cell_z == nullptr || vec_x == nullptr ||
+        vec_y == nullptr || vec_z == nullptr) {
         return false;
     }
-    x = coord_from_cell(cx->as_u64(), ox->as_f32());
-    y = coord_from_cell(cy->as_u64(), oy->as_f32());
-    z = coord_from_cell(cz->as_u64(), oz->as_f32());
+    *query.pos_x = coordFromCell(cell_x->asU64(), vec_x->asF32());
+    *query.pos_y = coordFromCell(cell_y->asU64(), vec_y->asF32());
+    *query.pos_z = coordFromCell(cell_z->asU64(), vec_z->asF32());
     return true;
 }
 
-bool fill_pose(const EntityContext& ctx, const Entity& controller, PoseSample& s) {
-    const auto* steam = controller.prop(kSteamId);
-    if (steam == nullptr || !is_individual_steam64(steam->as_u64())) {
+bool fillPose(const EntityContext& ctx, const Entity& controller, PoseSample& sample) {
+    const auto* steam = controller.prop(STEAM_ID);
+    if (steam == nullptr || !isIndividualSteam64(steam->asU64())) {
         return false;
     }
-    const auto handle = controller.prop_u64(kPlayerPawn);
-    if (!handle) {
+    const auto HANDLE = controller.propU64(PLAYER_PAWN);
+    if (!HANDLE) {
         return false;
     }
-    const Entity* pawn = ctx.find_by_handle(*handle);
+    const Entity* pawn = ctx.findByHandle(*HANDLE);
     if (pawn == nullptr) {
         return false;
     }
-    s.steam_id = steam->as_u64();
-    if (const auto* t = controller.prop(kTeamNum); t != nullptr) {
-        s.team_num = static_cast<int>(t->as_u64());
+    sample.steam_id = steam->asU64();
+    if (const auto* team = controller.prop(TEAM_NUM); team != nullptr) {
+        sample.team_num = static_cast<int>(team->asU64());
     }
-    if (s.team_num != 2 && s.team_num != 3) {
+    if (sample.team_num != TEAM_T && sample.team_num != TEAM_CT) {
         return false;
     }
-    if (const auto* hp = pawn->prop(kHealth); hp != nullptr) {
-        s.health = static_cast<int>(hp->as_i64());
+    if (const auto* health = pawn->prop(HEALTH); health != nullptr) {
+        sample.health = static_cast<int>(health->asI64());
     }
-    const auto life = pawn->prop_u64(kLifeState);
-    const bool alive = s.health > 0 || (life && *life == 0);
-    if (!alive) {
+    const auto LIFE = pawn->propU64(LIFE_STATE);
+    const bool ALIVE = sample.health > 0 || (LIFE && *LIFE == 0);
+    if (!ALIVE) {
         return false;
     }
-    if (!read_position(*pawn, s.x, s.y, s.z)) {
+    if (!readPosition({.pawn = pawn,
+                       .pos_x = &sample.pos_x,
+                       .pos_y = &sample.pos_y,
+                       .pos_z = &sample.pos_z})) {
         return false;
     }
-    if (const auto* ang = pawn->prop(kEyeAngles); ang != nullptr && ang->kind == ValKind::Vec3) {
-        s.pitch = ang->v3[0];
-        s.yaw = ang->v3[1];
+    if (const auto* angles = pawn->prop(EYE_ANGLES);
+        angles != nullptr && angles->kind == ValKind::VEC3) {
+        sample.pitch = angles->v3[PITCH_IDX];
+        sample.yaw = angles->v3[YAW_IDX];
     }
-    if (const auto* sc = pawn->prop(kIsScoped); sc != nullptr) {
-        s.scoped = sc->as_bool();
+    if (const auto* scoped = pawn->prop(IS_SCOPED); scoped != nullptr) {
+        sample.scoped = scoped->asBool();
     }
-    if (const auto ge = pawn->prop_u64(kGroundEntity); ge) {
-        s.airborne = *ge == kInvalidHandle;
+    if (const auto GROUND = pawn->propU64(GROUND_ENTITY); GROUND) {
+        sample.airborne = *GROUND == INVALID_HANDLE;
     }
 
-    // Prefer continuous duck amount; GOTV often leaves it near 0, so fall back
-    // to ducked/ducking bools and FL_DUCKING on m_fFlags.
-    float duck = 0.f;
-    if (const auto* d = pawn->prop(kDuckAmount); d != nullptr) {
-        duck = std::clamp(d->as_f32(), 0.f, 1.f);
+    float duck = 0.F;
+    if (const auto* amount = pawn->prop(DUCK_AMOUNT); amount != nullptr) {
+        duck = std::clamp(amount->asF32(), 0.F, 1.F);
     }
-    if (const auto* ducked = pawn->prop(kDucked); ducked != nullptr && ducked->as_bool()) {
-        duck = std::max(duck, 1.f);
-    } else if (const auto* ducking = pawn->prop(kDucking); ducking != nullptr && ducking->as_bool()) {
-        duck = std::max(duck, 0.85f);
+    if (const auto* ducked = pawn->prop(DUCKED); ducked != nullptr && ducked->asBool()) {
+        duck = std::max(duck, 1.F);
+    } else if (const auto* ducking = pawn->prop(DUCKING); ducking != nullptr && ducking->asBool()) {
+        duck = std::max(duck, DUCKING_MIN);
     }
-    if (const auto* flags = pawn->prop(kFlags); flags != nullptr) {
-        constexpr std::uint64_t kFlDucking = 1ULL << 1; // Source FL_DUCKING
-        if ((flags->as_u64() & kFlDucking) != 0) {
-            duck = std::max(duck, 1.f);
+    if (const auto* flags = pawn->prop(FLAGS); flags != nullptr) {
+        if ((flags->asU64() & FL_DUCKING) != 0) {
+            duck = std::max(duck, 1.F);
         }
     }
-    s.duck_amount = duck;
+    sample.duck_amount = duck;
     return true;
 }
 
 } // namespace
 
-void PoseSampler::collect_players(const EntityContext& ctx, std::vector<PlayerIdent>& out) const {
+void PoseSampler::collectPlayers(const EntityContext& ctx, std::vector<PlayerIdent>& out) {
     out.clear();
-    for (const Entity* e : ctx.tracked()) {
-        if (!is_controller(*e)) {
+    for (const Entity* ent : ctx.tracked()) {
+        if (!isController(*ent)) {
             continue;
         }
-        const auto* steam = e->prop(kSteamId);
-        if (steam == nullptr || !is_individual_steam64(steam->as_u64())) {
+        const auto* steam = ent->prop(STEAM_ID);
+        if (steam == nullptr || !isIndividualSteam64(steam->asU64())) {
             continue;
         }
-        PlayerIdent id;
-        id.steam_id = steam->as_u64();
-        if (const auto* n = e->prop(kPlayerName); n != nullptr && n->kind == ValKind::Str &&
-                                                  looks_like_player_name(n->s)) {
-            id.name = n->s;
+        PlayerIdent ident;
+        ident.steam_id = steam->asU64();
+        if (const auto* name = ent->prop(PLAYER_NAME);
+            name != nullptr && name->kind == ValKind::STR && looksLikePlayerName(name->s)) {
+            ident.name = name->s;
         }
-        if (const auto* t = e->prop(kTeamNum); t != nullptr) {
-            id.team_num = static_cast<int>(t->as_u64());
+        if (const auto* team = ent->prop(TEAM_NUM); team != nullptr) {
+            ident.team_num = static_cast<int>(team->asU64());
         }
-        if (const auto* c = e->prop(kConnected); c != nullptr) {
-            id.connected = c->as_u64() == 0; // PlayerConnectedState::Connected
+        if (const auto* connected = ent->prop(CONNECTED); connected != nullptr) {
+            ident.connected = connected->asU64() == 0;
         }
-        if (const auto* m = e->prop(kMvps); m != nullptr) {
-            id.mvp_count = static_cast<int>(m->as_i64());
+        if (const auto* mvps = ent->prop(MVPS); mvps != nullptr) {
+            ident.mvp_count = static_cast<int>(mvps->asI64());
         }
-        if (const auto* rt = e->prop(kRankType); rt != nullptr) {
-            id.rank_type = static_cast<int>(rt->as_i64());
+        if (const auto* rank_type = ent->prop(RANK_TYPE); rank_type != nullptr) {
+            ident.rank_type = static_cast<int>(rank_type->asI64());
         }
-        if (const auto* rk = e->prop(kRanking); rk != nullptr) {
-            id.ranking = static_cast<int>(rk->as_i64());
+        if (const auto* ranking = ent->prop(RANKING); ranking != nullptr) {
+            ident.ranking = static_cast<int>(ranking->asI64());
         }
-        if (const auto* rw = e->prop(kCompWins); rw != nullptr) {
-            id.competitive_wins = static_cast<int>(rw->as_i64());
+        if (const auto* comp_wins = ent->prop(COMP_WINS); comp_wins != nullptr) {
+            ident.competitive_wins = static_cast<int>(comp_wins->asI64());
         }
-        // Spectators / disconnected controllers still appear in PacketEntities.
-        if (!id.connected || (id.team_num != 2 && id.team_num != 3)) {
+        if (!ident.connected || (ident.team_num != TEAM_T && ident.team_num != TEAM_CT)) {
             continue;
         }
-        out.push_back(std::move(id));
+        out.push_back(std::move(ident));
     }
 }
 
-void PoseSampler::collect_poses(const EntityContext& ctx, std::vector<PoseSample>& out) const {
+void PoseSampler::collectPoses(const EntityContext& ctx, std::vector<PoseSample>& out) {
     out.clear();
-    for (const Entity* e : ctx.tracked()) {
-        if (!e->active() || !is_controller(*e)) {
+    for (const Entity* ent : ctx.tracked()) {
+        if (!ent->active() || !isController(*ent)) {
             continue;
         }
-        PoseSample s;
-        if (fill_pose(ctx, *e, s)) {
-            out.push_back(s);
+        PoseSample sample;
+        if (fillPose(ctx, *ent, sample)) {
+            out.push_back(sample);
         }
     }
 }
 
-bool PoseSampler::pose_for(const EntityContext& ctx, std::uint64_t steam_id, PoseSample& out) const {
-    for (const Entity* e : ctx.tracked()) {
-        if (!e->active() || !is_controller(*e)) {
+bool PoseSampler::poseFor(const EntityContext& ctx, std::uint64_t steam_id, PoseSample& out) {
+    for (const Entity* ent : ctx.tracked()) {
+        if (!ent->active() || !isController(*ent)) {
             continue;
         }
-        const auto* steam = e->prop(kSteamId);
-        if (steam == nullptr || steam->as_u64() != steam_id) {
+        const auto* steam = ent->prop(STEAM_ID);
+        if (steam == nullptr || steam->asU64() != steam_id) {
             continue;
         }
-        return fill_pose(ctx, *e, out);
+        return fillPose(ctx, *ent, out);
     }
     return false;
 }

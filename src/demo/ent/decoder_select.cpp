@@ -9,96 +9,100 @@
 namespace cyka::demo::ent {
 namespace {
 
-DecoderSpec simple(DecOp op) {
-    DecoderSpec s;
-    s.op = op;
-    return s;
+inline constexpr int FLOAT_BITS = 32;
+inline constexpr unsigned VEC3_COMPS = 3U;
+inline constexpr unsigned VEC2_COMPS = 2U;
+inline constexpr unsigned VEC4_COMPS = 4U;
+inline constexpr unsigned TRANSFORM_COMPS = 6U;
+
+DecoderSpec simple(DecOp dec_op) {
+    DecoderSpec spec;
+    spec.op = dec_op;
+    return spec;
 }
 
-DecoderSpec quantized_factory(const EntField& f) {
-    if (!f.bit_count || *f.bit_count <= 0 || *f.bit_count >= 32) {
-        return simple(DecOp::NoScale);
+DecoderSpec quantizedFactory(const EntField& field) {
+    if (!field.bit_count || *field.bit_count <= 0 || *field.bit_count >= FLOAT_BITS) {
+        return simple(DecOp::NO_SCALE);
     }
-    DecoderSpec s;
-    s.op = DecOp::Quantized;
-    s.qf = make_quantized_float(*f.bit_count, f.encode_flags, f.low_value, f.high_value);
-    return s;
+    DecoderSpec spec;
+    spec.op = DecOp::QUANTIZED;
+    spec.qf =
+        makeQuantizedFloat(*field.bit_count, field.encode_flags, field.low_value, field.high_value);
+    return spec;
 }
 
-DecoderSpec float_factory(const EntField& f) {
-    if (f.encoder == "coord") {
-        return simple(DecOp::Coord);
+DecoderSpec floatFactory(const EntField& field) {
+    if (field.encoder == "coord") {
+        return simple(DecOp::COORD);
     }
-    if (f.encoder == "simtime") {
-        return simple(DecOp::SimTime);
+    if (field.encoder == "simtime") {
+        return simple(DecOp::SIM_TIME);
     }
-    if (f.encoder == "runetime") {
-        return simple(DecOp::RuneTime);
+    if (field.encoder == "runetime") {
+        return simple(DecOp::RUNE_TIME);
     }
-    if (!f.bit_count || *f.bit_count <= 0 || *f.bit_count >= 32) {
-        return simple(DecOp::NoScale);
+    if (!field.bit_count || *field.bit_count <= 0 || *field.bit_count >= FLOAT_BITS) {
+        return simple(DecOp::NO_SCALE);
     }
-    return quantized_factory(f);
+    return quantizedFactory(field);
 }
 
-DecoderSpec vector_factory(const EntField& f, unsigned n) {
-    if (n == 3 && f.encoder == "normal") {
-        return simple(DecOp::Vec3Normal);
+DecoderSpec vectorFactory(const EntField& field, unsigned num_comps) {
+    if (num_comps == VEC3_COMPS && field.encoder == "normal") {
+        return simple(DecOp::VEC3_NORMAL);
     }
-    const DecoderSpec scalar = float_factory(f);
-    DecoderSpec s;
-    s.op = DecOp::Vector;
-    s.sub = scalar.op;
-    s.qf = scalar.qf;
-    s.comps = static_cast<std::uint8_t>(n);
-    return s;
+    const DecoderSpec SCALAR = floatFactory(field);
+    DecoderSpec spec;
+    spec.op = DecOp::VECTOR;
+    spec.sub = SCALAR.op;
+    spec.qf = SCALAR.qf;
+    spec.comps = static_cast<std::uint8_t>(num_comps);
+    return spec;
 }
 
-DecoderSpec qangle_factory(const EntField& f) {
-    if (f.encoder == "qangle_precise") {
-        return simple(DecOp::QAnglePrecise);
+DecoderSpec qangleFactory(const EntField& field) {
+    if (field.encoder == "qangle_precise") {
+        return simple(DecOp::Q_ANGLE_PRECISE);
     }
-    if (f.bit_count && *f.bit_count != 0) {
-        // 32-bit (or wider) components are noscale IEEE float32s, not scaled
-        // bit-angles. read_angle(32) would map the raw bits into [0,360) and
-        // garble m_aimPunchAngle / similar. Mirror float_factory's noscale guard.
-        if (*f.bit_count >= 32) {
-            DecoderSpec s;
-            s.op = DecOp::Vector;
-            s.sub = DecOp::NoScale;
-            s.comps = 3;
-            return s;
+    if (field.bit_count && *field.bit_count != 0) {
+        if (*field.bit_count >= FLOAT_BITS) {
+            DecoderSpec spec;
+            spec.op = DecOp::VECTOR;
+            spec.sub = DecOp::NO_SCALE;
+            spec.comps = static_cast<std::uint8_t>(VEC3_COMPS);
+            return spec;
         }
-        DecoderSpec s;
-        s.op = DecOp::QAngleBits;
-        s.bits = static_cast<std::uint32_t>(*f.bit_count);
-        return s;
+        DecoderSpec spec;
+        spec.op = DecOp::Q_ANGLE_BITS;
+        spec.bits = static_cast<std::uint32_t>(*field.bit_count);
+        return spec;
     }
-    return simple(DecOp::QAngleCoord);
+    return simple(DecOp::Q_ANGLE_COORD);
 }
 
-DecoderSpec unsigned64_factory(const EntField& f) {
-    return simple(f.encoder == "fixed64" ? DecOp::Fixed64 : DecOp::Unsigned64);
+DecoderSpec unsigned64Factory(const EntField& field) {
+    return simple(field.encoder == "fixed64" ? DecOp::FIXED64 : DecOp::UNSIGNED64);
 }
 
 /// Base types whose decoder depends on the field's encoder / bit count.
-bool factory_for(std::string_view base, const EntField& f, DecoderSpec& out) {
+bool factoryFor(std::string_view base, const EntField& field, DecoderSpec& out) {
     if (base == "float32") {
-        out = float_factory(f);
+        out = floatFactory(field);
     } else if (base == "CNetworkedQuantizedFloat") {
-        out = quantized_factory(f);
+        out = quantizedFactory(field);
     } else if (base == "uint64" || base == "CStrongHandle") {
-        out = unsigned64_factory(f);
+        out = unsigned64Factory(field);
     } else if (base == "Vector" || base == "VectorWS") {
-        out = vector_factory(f, 3);
+        out = vectorFactory(field, VEC3_COMPS);
     } else if (base == "Vector2D") {
-        out = vector_factory(f, 2);
+        out = vectorFactory(field, VEC2_COMPS);
     } else if (base == "Vector4D" || base == "Quaternion") {
-        out = vector_factory(f, 4);
+        out = vectorFactory(field, VEC4_COMPS);
     } else if (base == "CTransform") {
-        out = vector_factory(f, 6);
+        out = vectorFactory(field, TRANSFORM_COMPS);
     } else if (base == "QAngle") {
-        out = qangle_factory(f);
+        out = qangleFactory(field);
     } else {
         return false;
     }
@@ -107,34 +111,35 @@ bool factory_for(std::string_view base, const EntField& f, DecoderSpec& out) {
 
 } // namespace
 
-DecoderSpec find_decoder(const EntField& f) {
-    const std::string_view base = f.type ? std::string_view{f.type->base} : std::string_view{};
+DecoderSpec findDecoder(const EntField& field) {
+    const std::string_view BASE =
+        field.type ? std::string_view{field.type->base} : std::string_view{};
     DecoderSpec out;
-    if (factory_for(base, f, out)) {
+    if (factoryFor(BASE, field, out)) {
         return out;
     }
-    if (f.var_name == "m_iClip1") {
-        return simple(DecOp::Ammo);
+    if (field.var_name == "m_iClip1") {
+        return simple(DecOp::AMMO);
     }
-    if (const auto it = type_decoders().find(base); it != type_decoders().end()) {
-        return simple(it->second);
+    if (const auto ITER = typeDecoders().find(BASE); ITER != typeDecoders().end()) {
+        return simple(ITER->second);
     }
-    return simple(DecOp::Default);
+    return simple(DecOp::DEFAULT);
 }
 
-DecoderSpec find_decoder_by_base(const EntField& f) {
-    if (!f.type || !f.type->generic) {
-        return simple(DecOp::Default);
+DecoderSpec findDecoderByBase(const EntField& field) {
+    if (!field.type || !field.type->generic) {
+        return simple(DecOp::DEFAULT);
     }
-    const std::string_view base = f.type->generic->base;
+    const std::string_view BASE = field.type->generic->base;
     DecoderSpec out;
-    if (factory_for(base, f, out)) {
+    if (factoryFor(BASE, field, out)) {
         return out;
     }
-    if (const auto it = type_decoders().find(base); it != type_decoders().end()) {
-        return simple(it->second);
+    if (const auto ITER = typeDecoders().find(BASE); ITER != typeDecoders().end()) {
+        return simple(ITER->second);
     }
-    return simple(DecOp::Default);
+    return simple(DecOp::DEFAULT);
 }
 
 } // namespace cyka::demo::ent

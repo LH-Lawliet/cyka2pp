@@ -28,9 +28,9 @@ struct PlayerIdent {
 struct PoseSample {
     std::uint64_t steam_id{0};
     int team_num{0};
-    double x{0};
-    double y{0};
-    double z{0};
+    double pos_x{0};
+    double pos_y{0};
+    double pos_z{0};
     float pitch{0};
     float yaw{0};
     int health{0};
@@ -42,29 +42,31 @@ struct PoseSample {
 
 /// Pulls player identities and poses out of the live entity set.
 class PoseSampler {
-public:
+  public:
     /// True when `tick` is far enough past the last sample (default: every tick).
     [[nodiscard]] bool due(std::int32_t tick) const noexcept {
-        return sampled_ == 0 || tick - last_tick_ >= interval_ticks_;
+        return sampled == 0 || tick - last_tick >= interval_ticks;
     }
     void mark(std::int32_t tick) noexcept {
-        last_tick_ = tick;
-        ++sampled_;
+        last_tick = tick;
+        ++sampled;
     }
-    void set_interval_ticks(std::int32_t n) noexcept { interval_ticks_ = n > 0 ? n : 1; }
+    void setIntervalTicks(std::int32_t num_ticks) noexcept {
+        interval_ticks = num_ticks > 0 ? num_ticks : 1;
+    }
 
     /// Every controller with a real SteamID, whether or not it is alive.
-    void collect_players(const EntityContext& ctx, std::vector<PlayerIdent>& out) const;
+    static void collectPlayers(const EntityContext& ctx, std::vector<PlayerIdent>& out);
     /// Alive controller+pawn pairs at the current entity state.
-    void collect_poses(const EntityContext& ctx, std::vector<PoseSample>& out) const;
+    static void collectPoses(const EntityContext& ctx, std::vector<PoseSample>& out);
     /// Single-player lookup (weapon_fire aim capture).
-    [[nodiscard]] bool pose_for(const EntityContext& ctx, std::uint64_t steam_id,
-                                PoseSample& out) const;
+    [[nodiscard]] static bool poseFor(
+        const EntityContext& ctx, std::uint64_t steam_id, PoseSample& out);
 
-private:
-    std::int32_t last_tick_{0};
-    std::int32_t interval_ticks_{1};
-    std::size_t sampled_{0};
+  private:
+    std::int32_t last_tick{0};
+    std::int32_t interval_ticks{1};
+    std::size_t sampled{0};
 };
 
 } // namespace cyka::demo::ent

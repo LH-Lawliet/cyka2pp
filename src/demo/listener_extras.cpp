@@ -1,119 +1,120 @@
 #include "cyka/demo/listener.hpp"
 
+#include <algorithm>
 #include <string_view>
 
 namespace cyka::demo {
 namespace {
 
-[[nodiscard]] bool is_utility_weapon(std::string_view w) {
-    return w == "hegrenade" || w == "flashbang" || w == "smokegrenade" || w == "molotov" ||
-           w == "incgrenade" || w == "inferno" || w == "decoy";
+inline constexpr int MAX_HEALTH_DAMAGE = 100;
+inline constexpr int HEADSHOT_HITGROUP = 1;
+
+[[nodiscard]] bool isUtilityWeapon(std::string_view weapon) {
+    return weapon == "hegrenade" || weapon == "flashbang" || weapon == "smokegrenade" ||
+           weapon == "molotov" || weapon == "incgrenade" || weapon == "inferno" ||
+           weapon == "decoy";
 }
 
 } // namespace
 
-void CollectingListener::on_round_mvp(const GameEvent& ev) {
-    // CS2: userid is the usual field; some builds also expose userid_pawn.
-    int uid = ev_int(ev, "userid").value_or(0);
+void CollectingListener::onRoundMvp(const GameEvent& event) {
+    int uid = evInt(event, "userid").value_or(0);
     if (uid == 0) {
-        uid = ev_int(ev, "userid_pawn").value_or(0);
+        uid = evInt(event, "userid_pawn").value_or(0);
     }
-    const SteamId sid = steam_for_userid(uid);
-    if (sid.empty()) {
+    const SteamId SID = steamForUserid(uid);
+    if (SID.empty()) {
         return;
     }
-    ensure_player(sid, name_for_userid(uid), uid);
-    if (auto* p = find_player(sid)) {
-        ++p->mvp_count;
+    ensurePlayer(SID, nameForUserid(uid), uid);
+    if (auto* player = findPlayer(SID)) {
+        ++player->mvp_count;
     }
 }
 
-void CollectingListener::on_player_blind(const GameEvent& ev) {
-    const int atk = ev_int(ev, "attacker").value_or(0);
-    const int vic = ev_int(ev, "userid").value_or(0);
-    const SteamId as = steam_for_userid(atk);
-    const SteamId vs = steam_for_userid(vic);
-    if (as.empty() || as == vs) {
+void CollectingListener::onPlayerBlind(const GameEvent& event) {
+    const int ATK = evInt(event, "attacker").value_or(0);
+    const int VIC = evInt(event, "userid").value_or(0);
+    const SteamId ATTACKER_SID = steamForUserid(ATK);
+    const SteamId VICTIM_SID = steamForUserid(VIC);
+    if (ATTACKER_SID.empty() || ATTACKER_SID == VICTIM_SID) {
         return;
     }
-    auto at = team_of_.find(as);
-    auto vt = team_of_.find(vs);
-    if (at != team_of_.end() && vt != team_of_.end() && at->second == vt->second) {
+    auto attacker_team = team_of.find(ATTACKER_SID);
+    auto victim_team = team_of.find(VICTIM_SID);
+    if (attacker_team != team_of.end() && victim_team != team_of.end() &&
+        attacker_team->second == victim_team->second) {
         return;
     }
-    ensure_player(as, name_for_userid(atk), atk);
-    if (auto* p = find_player(as)) {
-        ++p->enemies_flashed;
+    ensurePlayer(ATTACKER_SID, nameForUserid(ATK), ATK);
+    if (auto* player = findPlayer(ATTACKER_SID)) {
+        ++player->enemies_flashed;
     }
 }
 
-void CollectingListener::on_bomb_planted(const GameEvent& ev) {
-    bomb_state_ = "planted";
-    const int uid = ev_int(ev, "userid").value_or(0);
-    const SteamId sid = steam_for_userid(uid);
-    ensure_player(sid, name_for_userid(uid), uid);
-    if (auto* p = find_player(sid)) {
-        ++p->bomb_planted_count;
+void CollectingListener::onBombPlanted(const GameEvent& event) {
+    bomb_state = "planted";
+    const int UID = evInt(event, "userid").value_or(0);
+    const SteamId SID = steamForUserid(UID);
+    ensurePlayer(SID, nameForUserid(UID), UID);
+    if (auto* player = findPlayer(SID)) {
+        ++player->bomb_planted_count;
     }
 }
 
-void CollectingListener::on_bomb_defused(const GameEvent& ev) {
-    bomb_state_ = "defused";
-    const int uid = ev_int(ev, "userid").value_or(0);
-    const SteamId sid = steam_for_userid(uid);
-    ensure_player(sid, name_for_userid(uid), uid);
-    if (auto* p = find_player(sid)) {
-        ++p->bomb_defused_count;
+void CollectingListener::onBombDefused(const GameEvent& event) {
+    bomb_state = "defused";
+    const int UID = evInt(event, "userid").value_or(0);
+    const SteamId SID = steamForUserid(UID);
+    ensurePlayer(SID, nameForUserid(UID), UID);
+    if (auto* player = findPlayer(SID)) {
+        ++player->bomb_defused_count;
     }
 }
 
-void CollectingListener::on_player_hurt(Tick tick, const GameEvent& ev) {
-    if (!match_started_ || round_number_ == 0 || match_over_) {
+void CollectingListener::onPlayerHurt(Tick tick, const GameEvent& event) {
+    if (!match_started || round_number == 0 || match_over) {
         return;
     }
-    RawDamage d;
-    d.tick = tick;
-    d.round_number = round_number_;
-    d.attacker_steam = steam_for_userid(ev_int(ev, "attacker").value_or(0));
-    d.victim_steam = steam_for_userid(ev_int(ev, "userid").value_or(0));
-    if (d.attacker_steam.empty() || d.attacker_steam == d.victim_steam) {
+    RawDamage damage;
+    damage.tick = tick;
+    damage.round_number = round_number;
+    damage.attacker_steam = steamForUserid(evInt(event, "attacker").value_or(0));
+    damage.victim_steam = steamForUserid(evInt(event, "userid").value_or(0));
+    if (damage.attacker_steam.empty() || damage.attacker_steam == damage.victim_steam) {
         return;
     }
-    auto at = team_of_.find(d.attacker_steam);
-    auto vt = team_of_.find(d.victim_steam);
-    if (at != team_of_.end() && vt != team_of_.end() && at->second == vt->second) {
-        return; // team damage excluded from ADR (csda / demoinfocs)
+    auto attacker_team = team_of.find(damage.attacker_steam);
+    auto victim_team = team_of.find(damage.victim_steam);
+    if (attacker_team != team_of.end() && victim_team != team_of.end() &&
+        attacker_team->second == victim_team->second) {
+        return;
     }
-    // HealthDamageTaken: exclude overkill (demoinfocs-compatible).
-    int taken = ev_int(ev, "dmg_health").value_or(0);
-    if (taken > 100) {
-        taken = 100;
-    }
-    if (taken < 0) {
-        taken = 0;
-    }
-    const int health_after = ev_int(ev, "health").value_or(-1);
-    if (health_after == 0 && health_lookup_) {
-        const int pre = health_lookup_(health_lookup_ctx_, d.victim_steam);
-        if (pre > 0 && pre < taken) {
-            taken = pre;
+    int taken = evInt(event, "dmg_health").value_or(0);
+    taken = std::min(taken, MAX_HEALTH_DAMAGE);
+    taken = std::max(taken, 0);
+    const int HEALTH_AFTER = evInt(event, "health").value_or(-1);
+    if (HEALTH_AFTER == 0 && health_lookup != nullptr) {
+        const int PRE = health_lookup(health_lookup_ctx, damage.victim_steam);
+        if (PRE > 0 && PRE < taken) {
+            taken = PRE;
         }
     }
-    d.health_damage = taken;
-    d.headshot = ev_int(ev, "hitgroup").value_or(0) == 1;
-    d.weapon = ev_string(ev, "weapon").value_or("");
-    ensure_player(d.attacker_steam, {}, 0);
-    add_utility_damage(d.attacker_steam, d.weapon, d.health_damage);
-    raw_.damages.push_back(std::move(d));
+    damage.health_damage = taken;
+    damage.headshot = evInt(event, "hitgroup").value_or(0) == HEADSHOT_HITGROUP;
+    damage.weapon = evString(event, "weapon").value_or("");
+    ensurePlayer(damage.attacker_steam, {}, 0);
+    addUtilityDamage(damage.attacker_steam, damage.weapon, damage.health_damage);
+    raw().damages.push_back(std::move(damage));
 }
 
-void CollectingListener::add_utility_damage(const SteamId& attacker, std::string_view weapon,
-                                            int dmg) {
-    if (attacker.empty() || dmg <= 0 || !is_utility_weapon(weapon)) {
+void CollectingListener::addUtilityDamage(
+    const SteamId& attacker, std::string_view weapon, int dmg) {
+    if (attacker.empty() || dmg <= 0 || !isUtilityWeapon(weapon)) {
         return;
     }
-    if (auto* p = find_player(attacker)) {
-        p->utility_damage += dmg;
+    if (auto* player = findPlayer(attacker)) {
+        player->utility_damage += dmg;
     }
 }
 

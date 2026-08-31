@@ -7,65 +7,66 @@
 
 namespace cyka::demo {
 
-DemoStream::DemoStream(std::span<const std::uint8_t> file) noexcept : file_(file) {
+DemoStream::DemoStream(std::span<const std::uint8_t> file) noexcept
+    : file_bytes(file) {
     // Filestamp "PBDEMS2\0" then 8 unknown bytes (demoinfocs skips them).
-    constexpr std::size_t kSkip = 16;
-    if (file_.size() < kSkip ||
-        std::memcmp(file_.data(), kCs2Magic, 7) != 0) {
-        ok_ = false;
-        err_ = Error::Unsupported;
+    constexpr std::size_t SKIP = 16;
+    if (file.size() < SKIP ||
+        std::memcmp(file.data(), CS2_MAGIC.data(), CS2_MAGIC_PREFIX_LEN) != 0) {
+        stream_ok = false;
+        stream_err = Error::UNSUPPORTED;
         return;
     }
-    pos_ = kSkip;
+    byte_pos = SKIP;
 }
 
 bool DemoStream::next(DemoFrame& out) {
     out = DemoFrame{};
-    if (!ok_ || pos_ >= file_.size()) {
+    if (!stream_ok || byte_pos >= file_bytes.size()) {
         return false;
     }
-    ByteReader r(file_.subspan(pos_));
-    auto cmd_raw = r.read_varint_u32();
+    ByteReader reader(file_bytes.subspan(byte_pos));
+    auto cmd_raw = reader.readVarintU32();
     if (!cmd_raw) {
-        ok_ = false;
-        err_ = Error::Parse;
+        stream_ok = false;
+        stream_err = Error::PARSE;
         return false;
     }
-    const bool compressed = (*cmd_raw & kDemIsCompressed) != 0;
-    const auto cmd = static_cast<DemoCommand>(*cmd_raw & ~kDemIsCompressed);
-    auto tick_v = r.read_varint_u32();
+    const bool COMPRESSED = (*cmd_raw & DEM_IS_COMPRESSED) != 0;
+    const auto CMD = static_cast<DemoCommand>(*cmd_raw & ~DEM_IS_COMPRESSED);
+    auto tick_v = reader.readVarintU32();
     if (!tick_v) {
-        ok_ = false;
-        err_ = Error::Parse;
+        stream_ok = false;
+        stream_err = Error::PARSE;
         return false;
     }
     Tick tick = static_cast<Tick>(*tick_v);
-    if (*tick_v == 0xffffffffu) {
+    if (*tick_v == TICK_SENTINEL) {
         tick = 0;
     }
-    if (cmd == DemoCommand::Stop) {
-        pos_ += r.pos();
-        out.cmd = cmd;
+    if (CMD == DemoCommand::STOP) {
+        byte_pos += reader.pos();
+        out.cmd = CMD;
         out.tick = tick;
         return false;
     }
-    auto size = r.read_varint_u32();
+    auto size = reader.readVarintU32();
     if (!size) {
-        ok_ = false;
-        err_ = Error::Parse;
+        stream_ok = false;
+        stream_err = Error::PARSE;
         return false;
     }
-    auto body = r.read_bytes(*size);
+    auto body = reader.readBytes(*size);
     if (!body) {
-        ok_ = false;
-        err_ = Error::Parse;
+        stream_ok = false;
+        stream_err = Error::PARSE;
         return false;
     }
-    pos_ += r.pos();
-    out.cmd = cmd;
+    byte_pos += reader.pos();
+    out.cmd = CMD;
     out.tick = tick;
-    if (compressed) {
-        auto dec = snappy_uncompress(*body);
+    if (COMPRESSED) {
+        auto dec = snappyUncompress(*body);
         if (!dec) {
             // Corrupt frame: skip rather than abort the whole demo.
             return true;
@@ -78,20 +79,20 @@ bool DemoStream::next(DemoFrame& out) {
     return true;
 }
 
-Result<void> for_each_frame(std::span<const std::uint8_t> file,
-                            const std::function<void(const DemoFrame&)>& fn) {
+Result<void> forEachFrame(std::span<const std::uint8_t> file,
+                          const std::function<void(const DemoFrame&)>& callback) {
     DemoStream stream(file);
     if (!stream.ok()) {
         return std::unexpected(stream.error());
     }
     DemoFrame frame;
     while (stream.next(frame)) {
-        if (frame.cmd == DemoCommand::Error && frame.payload.empty() && frame.owned.empty()) {
+        if (frame.cmd == DemoCommand::ERROR && frame.payload.empty() && frame.owned.empty()) {
             continue;
         }
-        fn(frame);
+        callback(frame);
     }
-    if (!stream.ok() && stream.error() != Error::Ok) {
+    if (!stream.ok() && stream.error() != Error::OK) {
         return std::unexpected(stream.error());
     }
     return {};

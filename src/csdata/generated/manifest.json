@@ -1,0 +1,97 @@
+{
+  "BL_0": {
+    "file": "bl_0.bin",
+    "count": 30,
+    "source": "spray_base_lmg.cpp"
+  },
+  "BL_1": {
+    "file": "bl_1.bin",
+    "count": 20,
+    "source": "spray_base_lmg.cpp"
+  },
+  "BR_0": {
+    "file": "br_0.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BR_1": {
+    "file": "br_1.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BR_2": {
+    "file": "br_2.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BR_3": {
+    "file": "br_3.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BR_4": {
+    "file": "br_4.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BR_5": {
+    "file": "br_5.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BR_6": {
+    "file": "br_6.bin",
+    "count": 20,
+    "source": "spray_base_rifles.cpp"
+  },
+  "BS_0": {
+    "file": "bs_0.bin",
+    "count": 20,
+    "source": "spray_base_smg.cpp"
+  },
+  "BS_1": {
+    "file": "bs_1.bin",
+    "count": 20,
+    "source": "spray_base_smg.cpp"
+  },
+  "BS_2": {
+    "file": "bs_2.bin",
+    "count": 20,
+    "source": "spray_base_smg.cpp"
+  },
+  "BS_3": {
+    "file": "bs_3.bin",
+    "count": 20,
+    "source": "spray_base_smg.cpp"
+  },
+  "BS_4": {
+    "file": "bs_4.bin",
+    "count": 20,
+    "source": "spray_base_smg.cpp"
+  },
+  "BS_5": {
+    "file": "bs_5.bin",
+    "count": 30,
+    "source": "spray_base_smg.cpp"
+  },
+  "BS_6": {
+    "file": "bs_6.bin",
+    "count": 20,
+    "source": "spray_base_smg.cpp"
+  },
+  "NOSIL_0": {
+    "file": "nosil_0.bin",
+    "count": 20,
+    "source": "spray_nosil.cpp"
+  },
+  "SCOPED_0": {
+    "file": "scoped_0.bin",
+    "count": 30,
+    "source": "spray_scoped.cpp"
+  },
+  "SCOPED_1": {
+    "file": "scoped_1.bin",
+    "count": 30,
+    "source": "spray_scoped.cpp"
+  }
+}

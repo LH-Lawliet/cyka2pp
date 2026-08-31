@@ -13,61 +13,71 @@
 
 namespace cyka::demo::ent {
 
-inline constexpr int kMaxEdictBits = 14;
-inline constexpr std::uint64_t kHandleIndexMask = (1ULL << kMaxEdictBits) - 1ULL;
-inline constexpr std::uint64_t kInvalidHandle = (1ULL << (kMaxEdictBits + 10)) - 1ULL;
+inline constexpr std::uint32_t MAX_EDICT_BITS = 14U;
+inline constexpr std::uint64_t HANDLE_INDEX_MASK =
+    (1ULL << static_cast<unsigned>(MAX_EDICT_BITS)) - 1ULL;
+inline constexpr std::uint64_t INVALID_HANDLE =
+    (1ULL << (static_cast<unsigned>(MAX_EDICT_BITS) + 10U)) - 1ULL;
+
+struct EntitySpawn {
+    std::int32_t index{0};
+    std::int32_t serial{0};
+    const EntClass* cls{nullptr};
+};
 
 /// One networked entity. State is only retained for `tracked` entities; all
 /// others are still decoded (the bitstream is shared) but their values dropped.
 class Entity {
   public:
-    Entity(std::int32_t index, std::int32_t serial, const EntClass* cls)
-        : index_(index), serial_(serial), cls_(cls) {
-        if (cls != nullptr && cls->poly_count > 0) {
-            poly_serializers_.assign(static_cast<std::size_t>(cls->poly_count), nullptr);
+    explicit Entity(EntitySpawn spawn)
+        : entity_index(spawn.index),
+          entity_serial(spawn.serial),
+          ent_class(spawn.cls) {
+        if (spawn.cls != nullptr && spawn.cls->poly_count > 0) {
+            poly_serializers.assign(static_cast<std::size_t>(spawn.cls->poly_count), nullptr);
         }
     }
 
-    [[nodiscard]] std::int32_t index() const noexcept { return index_; }
-    [[nodiscard]] std::int32_t serial() const noexcept { return serial_; }
-    [[nodiscard]] const EntClass* cls() const noexcept { return cls_; }
-    [[nodiscard]] bool active() const noexcept { return active_; }
-    void set_active(bool v) noexcept { active_ = v; }
-    [[nodiscard]] bool tracked() const noexcept { return tracked_; }
-    void set_tracked(bool v) noexcept { tracked_ = v; }
+    [[nodiscard]] std::int32_t index() const noexcept { return entity_index; }
+    [[nodiscard]] std::int32_t serial() const noexcept { return entity_serial; }
+    [[nodiscard]] const EntClass* cls() const noexcept { return ent_class; }
+    [[nodiscard]] bool active() const noexcept { return is_active; }
+    void setActive(bool value) noexcept { is_active = value; }
+    [[nodiscard]] bool tracked() const noexcept { return is_tracked; }
+    void setTracked(bool value) noexcept { is_tracked = value; }
 
     /// Decode one entity delta. Returns false when the stream desynced.
-    [[nodiscard]] bool read_fields(BitStream& r, std::vector<FieldPath>& scratch);
+    [[nodiscard]] bool readFields(BitStream& reader, std::vector<FieldPath>& scratch);
 
     [[nodiscard]] const EntValue* get(std::uint64_t key) const {
-        const auto it = state_.find(key);
-        return it == state_.end() ? nullptr : &it->second;
+        const auto ITER = prop_state.find(key);
+        return ITER == prop_state.end() ? nullptr : &ITER->second;
     }
 
     /// Look up a property by dotted name (e.g. `CBodyComponent.m_cellX`).
     [[nodiscard]] const EntValue* prop(const std::string& name) const {
-        if (cls_ == nullptr) {
+        if (ent_class == nullptr) {
             return nullptr;
         }
-        const auto key = cls_->key_for(name);
-        return key ? get(*key) : nullptr;
+        const auto KEY = ent_class->keyFor(name);
+        return KEY ? get(*KEY) : nullptr;
     }
 
-    [[nodiscard]] std::optional<std::uint64_t> prop_u64(const std::string& name) const {
-        const auto* v = prop(name);
-        return v == nullptr ? std::nullopt : std::optional{v->as_u64()};
+    [[nodiscard]] std::optional<std::uint64_t> propU64(const std::string& name) const {
+        const auto* value = prop(name);
+        return value == nullptr ? std::nullopt : std::optional{value->asU64()};
     }
 
   private:
-    void apply_poly(int id, const EntSerializer* ser);
+    void applyPoly(int poly_id, const EntSerializer* ser);
 
-    std::int32_t index_{0};
-    std::int32_t serial_{0};
-    const EntClass* cls_{nullptr};
-    bool active_{true};
-    bool tracked_{false};
-    std::unordered_map<std::uint64_t, EntValue> state_;
-    std::vector<const EntSerializer*> poly_serializers_;
+    std::int32_t entity_index{0};
+    std::int32_t entity_serial{0};
+    const EntClass* ent_class{nullptr};
+    bool is_active{true};
+    bool is_tracked{false};
+    std::unordered_map<std::uint64_t, EntValue> prop_state;
+    std::vector<const EntSerializer*> poly_serializers;
 };
 
 } // namespace cyka::demo::ent

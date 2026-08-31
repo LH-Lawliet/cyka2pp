@@ -1,6 +1,6 @@
-#include "cyka/render/table.hpp"
-
 #include "cyka/render/ansi.hpp"
+#include "cyka/render/layout.hpp"
+#include "cyka/render/table.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -11,66 +11,93 @@
 namespace cyka::render {
 namespace {
 
-struct Row {
-    const Player* p;
+struct ClutchRow {
+    const Player* player;
     int total{0};
 };
 
-[[nodiscard]] int clutch_total(const Player& p) {
-    return p.one_vs_one_count + p.one_vs_two_count + p.one_vs_three_count + p.one_vs_four_count +
-           p.one_vs_five_count;
+[[nodiscard]] int clutchTotal(const Player& player) {
+    return player.one_vs_one_count + player.one_vs_two_count + player.one_vs_three_count +
+           player.one_vs_four_count + player.one_vs_five_count;
 }
 
-void fmt_wl(std::ostream& out, int count, int won, int lost) {
-    if (count <= 0) {
-        out << std::setw(7) << "—";
+struct WinLoss {
+    int count{0};
+    int won{0};
+    int lost{0};
+};
+
+void formatWinLoss(std::ostream& out, WinLoss win_loss) {
+    if (win_loss.count <= 0) {
+        out << std::setw(COL_CLUTCH) << "—";
         return;
     }
     std::ostringstream oss;
-    oss << won << "-" << lost;
-    out << std::setw(7) << oss.str();
+    oss << win_loss.won << "-" << win_loss.lost;
+    out << std::setw(COL_CLUTCH) << oss.str();
+}
+
+[[nodiscard]] std::string truncateName(std::string name) {
+    if (name.size() > static_cast<std::size_t>(COL_NAME)) {
+        name.resize(static_cast<std::size_t>(COL_TRUNC));
+        name += "...";
+    }
+    return name;
 }
 
 } // namespace
 
-Result<void> write_clutches(std::ostream& out, const Match& match) {
-    std::vector<Row> rows;
-    for (const auto& [_, p] : match.players) {
-        const int n = clutch_total(p);
-        if (n > 0) {
-            rows.push_back({&p, n});
+Result<void> writeClutches(std::ostream& out, const Match& match) {
+    std::vector<ClutchRow> rows;
+    for (const auto& [_steam_id, player] : match.players) {
+        const int TOTAL = clutchTotal(player);
+        if (TOTAL > 0) {
+            rows.push_back({.player = &player, .total = TOTAL});
         }
     }
-    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
-        return a.total > b.total || (a.total == b.total && a.p->name < b.p->name);
+    std::ranges::sort(rows, [](const ClutchRow& lhs, const ClutchRow& rhs) {
+        return lhs.total > rhs.total ||
+               (lhs.total == rhs.total && lhs.player->name < rhs.player->name);
     });
 
-    out << kAnsiBold << "  Clutches" << kAnsiReset << '\n';
-    out << kAnsiCyan << kAnsiBold << "  " << std::left << std::setw(16) << "Name" << std::right
-        << std::setw(7) << "1v1" << std::setw(7) << "1v2" << std::setw(7) << "1v3" << std::setw(7)
-        << "1v4" << std::setw(7) << "1v5" << kAnsiReset << '\n';
-    out << kAnsiMuted << "  " << std::string(58, '-') << "  (W-L)" << kAnsiReset << '\n';
+    out << ANSI_BOLD << "  Clutches" << ANSI_RESET << '\n';
+    out << ANSI_CYAN << ANSI_BOLD << "  " << std::left << std::setw(COL_NAME) << "Name"
+        << std::right << std::setw(COL_CLUTCH) << "1v1" << std::setw(COL_CLUTCH) << "1v2"
+        << std::setw(COL_CLUTCH) << "1v3" << std::setw(COL_CLUTCH) << "1v4" << std::setw(COL_CLUTCH)
+        << "1v5" << ANSI_RESET << '\n';
+    out << ANSI_MUTED << "  " << std::string(COL_CLUTCH_RULE, '-') << "  (W-L)" << ANSI_RESET
+        << '\n';
 
-    for (const Row& r : rows) {
-        const Player& p = *r.p;
-        std::string name = p.name;
-        if (name.size() > 16) {
-            name.resize(13);
-            name += "...";
-        }
-        out << "  " << std::left << std::setw(16) << name << std::right;
-        fmt_wl(out, p.one_vs_one_count, p.one_vs_one_won_count, p.one_vs_one_lost_count);
-        fmt_wl(out, p.one_vs_two_count, p.one_vs_two_won_count, p.one_vs_two_lost_count);
-        fmt_wl(out, p.one_vs_three_count, p.one_vs_three_won_count, p.one_vs_three_lost_count);
-        fmt_wl(out, p.one_vs_four_count, p.one_vs_four_won_count, p.one_vs_four_lost_count);
-        fmt_wl(out, p.one_vs_five_count, p.one_vs_five_won_count, p.one_vs_five_lost_count);
+    for (const ClutchRow& row : rows) {
+        const Player& player = *row.player;
+        out << "  " << std::left << std::setw(COL_NAME) << truncateName(player.name) << std::right;
+        formatWinLoss(out,
+                      {.count = player.one_vs_one_count,
+                       .won = player.one_vs_one_won_count,
+                       .lost = player.one_vs_one_lost_count});
+        formatWinLoss(out,
+                      {.count = player.one_vs_two_count,
+                       .won = player.one_vs_two_won_count,
+                       .lost = player.one_vs_two_lost_count});
+        formatWinLoss(out,
+                      {.count = player.one_vs_three_count,
+                       .won = player.one_vs_three_won_count,
+                       .lost = player.one_vs_three_lost_count});
+        formatWinLoss(out,
+                      {.count = player.one_vs_four_count,
+                       .won = player.one_vs_four_won_count,
+                       .lost = player.one_vs_four_lost_count});
+        formatWinLoss(out,
+                      {.count = player.one_vs_five_count,
+                       .won = player.one_vs_five_won_count,
+                       .lost = player.one_vs_five_lost_count});
         out << '\n';
     }
     if (rows.empty()) {
-        out << kAnsiMuted << "  (none)" << kAnsiReset << '\n';
+        out << ANSI_MUTED << "  (none)" << ANSI_RESET << '\n';
     }
     if (!out) {
-        return std::unexpected(Error::Io);
+        return std::unexpected(Error::IO);
     }
     return {};
 }

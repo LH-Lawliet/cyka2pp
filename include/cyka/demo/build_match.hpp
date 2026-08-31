@@ -8,6 +8,6 @@
 namespace cyka::demo {
 
 /// Convert RawMatch into the consumer Match model (kills/rounds/players/teams).
-[[nodiscard]] Match build_match(RawMatch raw, std::string file_hash);
+[[nodiscard]] Match buildMatch(RawMatch raw, std::string file_hash);
 
 } // namespace cyka::demo

@@ -1,182 +1,85 @@
+#include "cyka/csdata/spray_embed.hpp"
 #include "cyka/csdata/spray_tables_internal.hpp"
 
 namespace cyka::csdata::detail {
 namespace {
 
-constexpr SprayPoint k_bs_0[] = {
-    {-0.0625, -0.03125},
-    {-0.09375, -0.125},
-    {-0.03125, -0.1875},
-    {-0.03125, -0.25},
-    {0.0, -0.6875},
-    {0.34375, -1.28125},
-    {0.625, -1.875},
-    {0.8125, -2.4375},
-    {0.6875, -2.78125},
-    {0.90625, -3.09375},
-    {1.0625, -3.5},
-    {1.125, -3.71875},
-    {1.0625, -3.875},
-    {1.0, -3.96875},
-    {0.78125, -4.09375},
-    {0.0625, -4.09375},
-    {-0.53125, -3.84375},
-    {-0.647141, -3.806131},
-    {-0.875, -3.78125},
-    {-0.79219, -3.843504},
-};
-constexpr SprayPoint k_bs_1[] = {
-    {0.0, -0.0625},
-    {0.0, -0.125},
-    {-0.0625, -0.15625},
-    {-0.125, -0.28125},
-    {-0.28125, -0.59375},
-    {-0.46875, -0.90625},
-    {-0.4375, -1.3125},
-    {-0.71875, -1.75},
-    {-0.875, -2.09375},
-    {-1.09375, -2.15625},
-    {-1.25, -2.375},
-    {-0.96875, -2.59375},
-    {-0.46875, -2.6875},
-    {-0.03125, -2.625},
-    {0.34375, -2.59375},
-    {0.34375, -2.71875},
-    {0.1875, -2.84375},
-    {0.09375, -3.0},
-    {0.03125, -3.15625},
-    {0.09375, -3.21875},
-};
-constexpr SprayPoint k_bs_2[] = {
-    {0.0, -0.0625},
-    {0.0, -0.125},
-    {-0.0625, -0.15625},
-    {-0.125, -0.28125},
-    {-0.21875, -0.5},
-    {-0.46875, -1.0},
-    {-0.5, -1.40625},
-    {-0.71875, -1.75},
-    {-0.875, -2.09375},
-    {-1.125, -2.21875},
-    {-1.28125, -2.28125},
-    {-1.0625, -2.53125},
-    {-0.46875, -2.6875},
-    {0.03125, -2.65625},
-    {0.34375, -2.65625},
-    {0.34375, -2.78125},
-    {0.1875, -2.84375},
-    {0.09375, -3.03125},
-    {0.03125, -3.125},
-    {0.09375, -3.21875},
-};
-constexpr SprayPoint k_bs_3[] = {
-    {0.0, 0.0},
-    {-0.03125, -0.15625},
-    {-0.03125, -0.15625},
-    {0.0, -0.59375},
-    {-0.03125, -1.03125},
-    {0.1875, -1.71875},
-    {0.125, -2.3125},
-    {0.0, -2.75},
-    {0.4375, -3.3125},
-    {0.90625, -3.4375},
-    {1.40625, -3.40625},
-    {2.09375, -3.34375},
-    {2.0625, -3.5},
-    {2.0, -3.875},
-    {1.375, -4.09375},
-    {1.03125, -4.3125},
-    {0.59375, -4.40625},
-    {0.15625, -4.65625},
-    {-0.46875, -4.5625},
-    {-1.0625, -4.375},
-};
-constexpr SprayPoint k_bs_4[] = {
-    {-0.03125, -0.0625},
-    {-0.03125, -0.03125},
-    {0.0, -0.1875},
-    {0.0, -0.25},
-    {-0.15625, -0.6875},
-    {-0.34375, -1.0},
-    {-0.78125, -1.46875},
-    {-0.9375, -1.90625},
-    {-0.71875, -2.21875},
-    {-0.5, -2.65625},
-    {-0.4375, -2.875},
-    {-0.375, -3.28125},
-    {-0.4375, -3.375},
-    {-0.78125, -3.46875},
-    {-0.90625, -3.46875},
-    {-1.15625, -3.59375},
-    {-1.34375, -3.59375},
-    {-1.0, -3.65625},
-    {-0.647141, -3.64496},
-    {-0.28125, -3.71875},
-};
-constexpr SprayPoint k_bs_5[] = {
-    {0.0, -0.0625},
-    {-0.0625, -0.125},
-    {-0.0625, -0.1875},
-    {-0.1875, -0.40625},
-    {-0.4375, -0.78125},
-    {-0.6875, -1.21875},
-    {-0.5625, -1.71875},
-    {-0.375, -2.21875},
-    {-0.28125, -2.625},
-    {0.15625, -2.84375},
-    {0.46875, -2.9375},
-    {0.78125, -3.28125},
-    {1.0, -3.21875},
-    {0.71875, -3.40625},
-    {0.132497, -3.344818},
-    {0.125, -3.34375},
-    {0.311018, -3.587737},
-    {0.444909, -3.643796},
-    {0.578801, -3.671825},
-    {0.779637, -3.690511},
-    {1.103208, -3.671825},
-    {1.5, -3.53125},
-    {1.6875, -3.46875},
-    {1.783821, -3.344818},
-    {1.962343, -3.279416},
-    {2.03125, -3.3125},
-    {1.96875, -3.4375},
-    {1.90625, -3.5625},
-    {1.75, -3.5625},
-    {1.214784, -3.587737},
-};
-constexpr SprayPoint k_bs_6[] = {
-    {0.0, -0.125},
-    {-0.03125, -0.1875},
-    {-0.09375, -0.40625},
-    {-0.15625, -0.8125},
-    {-0.34375, -1.59375},
-    {-0.53125, -2.09375},
-    {-0.59375, -2.71875},
-    {-0.34375, -3.34375},
-    {-0.375, -3.6875},
-    {-0.0625, -4.0},
-    {0.3125, -4.03125},
-    {0.6875, -4.3125},
-    {0.71875, -4.46875},
-    {0.76848, -4.51387},
-    {0.880056, -4.52321},
-    {1.03125, -4.53125},
-    {1.15625, -4.625},
-    {0.78125, -4.71875},
-    {0.34375, -4.6875},
-    {0.34375, -4.59375},
-};
+inline constexpr std::size_t SPRAY_POINTS_SHORT = 20;
+inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
+
+SpraySpan sprayMac10() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_0.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
+SpraySpan sprayMp5Sd() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_1.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
+SpraySpan sprayMp7() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_2.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
+SpraySpan sprayMp9() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_3.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
+SpraySpan sprayP90() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_4.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
+SpraySpan sprayPpBizon() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+#embed "generated/bs_5.bin"
+    };
+    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+}
+
+SpraySpan sprayUmp45() {
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_6.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+}
+
 } // namespace
 
-SpraySpan find_base_smg(std::string_view w) {
-    if (w == "MAC-10") { return {k_bs_0, 20}; }
-    if (w == "MP5-SD") { return {k_bs_1, 20}; }
-    if (w == "MP7") { return {k_bs_2, 20}; }
-    if (w == "MP9") { return {k_bs_3, 20}; }
-    if (w == "P90") { return {k_bs_4, 20}; }
-    if (w == "PP-Bizon") { return {k_bs_5, 30}; }
-    if (w == "UMP-45") { return {k_bs_6, 20}; }
+SpraySpan findBaseSmg(std::string_view weapon) {
+    if (weapon == "MAC-10") {
+        return sprayMac10();
+    }
+    if (weapon == "MP5-SD") {
+        return sprayMp5Sd();
+    }
+    if (weapon == "MP7") {
+        return sprayMp7();
+    }
+    if (weapon == "MP9") {
+        return sprayMp9();
+    }
+    if (weapon == "P90") {
+        return sprayP90();
+    }
+    if (weapon == "PP-Bizon") {
+        return sprayPpBizon();
+    }
+    if (weapon == "UMP-45") {
+        return sprayUmp45();
+    }
     return {};
 }
 

@@ -1,6 +1,7 @@
 #include "cyka/metrics/swing.hpp"
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <string>
 #include <vector>
@@ -8,21 +9,32 @@
 namespace cyka::metrics {
 namespace {
 
-// Team-A perspective win probs by manpower [a][b], 1..5 (Go prototype / demolens table).
-constexpr double kMpWin[6][6] = {
-    {0, 0, 0, 0, 0, 0},
-    {0, 0.4303, 0.1234, 0.0288, 0.0069, 0.0022},
-    {0, 0.7915, 0.4399, 0.1872, 0.0683, 0.0227},
-    {0, 0.9420, 0.7327, 0.4551, 0.2360, 0.1061},
-    {0, 0.9850, 0.8933, 0.7003, 0.4698, 0.2750},
-    {0, 0.9967, 0.9614, 0.8582, 0.6835, 0.4873},
+inline constexpr int MAX_ALIVE = 5;
+inline constexpr int MP_WIN_COLS = MAX_ALIVE + 1;
+inline constexpr double EVEN_WIN_PROB = 0.5;
+
+// Team-A perspective win probs by manpower [alive_a][alive_b], 1..5 (Go prototype).
+[[nodiscard]] constexpr std::array<double, MP_WIN_COLS> makeMpWinRow(
+    double row_1, double row_2, double row_3, double row_4, double row_5) noexcept {
+    return {0, row_1, row_2, row_3, row_4, row_5};
+}
+
+inline constexpr std::array<std::array<double, MP_WIN_COLS>, MP_WIN_COLS> MP_WIN = {
+    {
+     {{0, 0, 0, 0, 0, 0}},
+     makeMpWinRow(0.4303, 0.1234, 0.0288, 0.0069, 0.0022),
+     makeMpWinRow(0.7915, 0.4399, 0.1872, 0.0683, 0.0227),
+     makeMpWinRow(0.9420, 0.7327, 0.4551, 0.2360, 0.1061),
+     makeMpWinRow(0.9850, 0.8933, 0.7003, 0.4698, 0.2750),
+     makeMpWinRow(0.9967, 0.9614, 0.8582, 0.6835, 0.4873),
+     }
 };
 
-[[nodiscard]] double win_prob(int alive_a, int alive_b) {
-    alive_a = std::clamp(alive_a, 0, 5);
-    alive_b = std::clamp(alive_b, 0, 5);
+[[nodiscard]] double winProb(int alive_a, int alive_b) {
+    alive_a = std::clamp(alive_a, 0, MAX_ALIVE);
+    alive_b = std::clamp(alive_b, 0, MAX_ALIVE);
     if (alive_a <= 0 && alive_b <= 0) {
-        return 0.5;
+        return EVEN_WIN_PROB;
     }
     if (alive_a <= 0) {
         return 0.0;
@@ -30,29 +42,33 @@ constexpr double kMpWin[6][6] = {
     if (alive_b <= 0) {
         return 1.0;
     }
-    return kMpWin[alive_a][alive_b];
+    return MP_WIN[static_cast<std::size_t>(alive_a)][static_cast<std::size_t>(alive_b)];
 }
 
 } // namespace
 
-void compute_round_swing(Match& match) {
+void computeRoundSwing(Match& match) {
     std::map<SteamId, std::string> team_of;
-    std::map<std::string, std::vector<SteamId>> roster{{"A", {}}, {"B", {}}};
-    for (const auto& [sid, p] : match.players) {
-        team_of[sid] = p.team;
-        roster[p.team].push_back(sid);
+    std::map<std::string, std::vector<SteamId>> roster{
+        {"A", {}},
+        {"B", {}}
+    };
+    for (const auto& [sid, player] : match.players) {
+        team_of[sid] = player.team;
+        roster[player.team].push_back(sid);
     }
     std::map<int, std::vector<Kill*>> by_round;
-    for (auto& k : match.kills) {
-        if (k) {
-            by_round[k->round_number].push_back(k.get());
+    for (auto& kill : match.kills) {
+        if (kill != nullptr) {
+            by_round[kill->round_number].push_back(kill.get());
         }
     }
     std::map<SteamId, double> swing;
-    for (auto& [rn, kills] : by_round) {
-        (void)rn;
-        std::sort(kills.begin(), kills.end(),
-                  [](const Kill* a, const Kill* b) { return a->tick < b->tick; });
+    for (auto& [round_num, kills] : by_round) {
+        (void)round_num;
+        std::ranges::sort(kills, [](const Kill* lhs, const Kill* rhs) {
+            return lhs->tick < rhs->tick;
+        });
         std::map<SteamId, bool> alive;
         for (const auto& sid : roster["A"]) {
             alive[sid] = true;
@@ -61,34 +77,35 @@ void compute_round_swing(Match& match) {
             alive[sid] = true;
         }
         auto count = [&](const std::string& team) {
-            int n = 0;
-            for (const auto& [sid, ok] : alive) {
-                if (ok && team_of[sid] == team) {
-                    ++n;
+            int num = 0;
+            for (const auto& [sid, is_alive] : alive) {
+                if (is_alive && team_of[sid] == team) {
+                    ++num;
                 }
             }
-            return n;
+            return num;
         };
-        for (Kill* k : kills) {
-            if (k->killer_steam_id.empty() || k->killer_steam_id == k->victim_steam_id) {
-                if (!k->victim_steam_id.empty()) {
-                    alive[k->victim_steam_id] = false;
+        for (const Kill* kill_ptr : kills) {
+            if (kill_ptr->killer_steam_id.empty() ||
+                kill_ptr->killer_steam_id == kill_ptr->victim_steam_id) {
+                if (!kill_ptr->victim_steam_id.empty()) {
+                    alive[kill_ptr->victim_steam_id] = false;
                 }
                 continue;
             }
-            const int a0 = count("A");
-            const int b0 = count("B");
-            if (!k->victim_steam_id.empty()) {
-                alive[k->victim_steam_id] = false;
+            const int ALIVE_A0 = count("A");
+            const int ALIVE_B0 = count("B");
+            if (!kill_ptr->victim_steam_id.empty()) {
+                alive[kill_ptr->victim_steam_id] = false;
             }
-            const int a1 = count("A");
-            const int b1 = count("B");
-            double dp = win_prob(a1, b1) - win_prob(a0, b0);
-            if (team_of[k->killer_steam_id] == "B") {
-                dp = -dp;
+            const int ALIVE_A1 = count("A");
+            const int ALIVE_B1 = count("B");
+            double delta_prob = winProb(ALIVE_A1, ALIVE_B1) - winProb(ALIVE_A0, ALIVE_B0);
+            if (team_of[kill_ptr->killer_steam_id] == "B") {
+                delta_prob = -delta_prob;
             }
-            swing[k->killer_steam_id] += dp;
-            swing[k->victim_steam_id] -= dp;
+            swing[kill_ptr->killer_steam_id] += delta_prob;
+            swing[kill_ptr->victim_steam_id] -= delta_prob;
         }
     }
     int rounds = static_cast<int>(match.rounds.size());
@@ -96,14 +113,14 @@ void compute_round_swing(Match& match) {
         rounds = 1;
     }
     for (auto& [sid, total] : swing) {
-        auto pit = match.players.find(sid);
-        if (pit == match.players.end()) {
+        auto piter = match.players.find(sid);
+        if (piter == match.players.end()) {
             continue;
         }
-        if (!pit->second.aim) {
-            pit->second.aim = PlayerAim{};
+        if (!piter->second.aim) {
+            piter->second.aim = PlayerAim{};
         }
-        pit->second.aim->round_swing_per_round = total / static_cast<double>(rounds);
+        piter->second.aim->round_swing_per_round = total / static_cast<double>(rounds);
     }
 }
 

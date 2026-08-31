@@ -9,7 +9,6 @@
 namespace cyka {
 
 /// Parse + score a CS2 demo (PBDEMS2 → RawMatch → metrics / aim / highlights).
-[[nodiscard]] Result<Match> analyze_file(const std::filesystem::path& path,
-                                         const Options& options);
+[[nodiscard]] Result<Match> analyzeFile(const std::filesystem::path& path, const Options& options);
 
 } // namespace cyka

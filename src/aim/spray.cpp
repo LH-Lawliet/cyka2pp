@@ -3,176 +3,193 @@
 #include "cyka/csdata/spray_tables.hpp"
 #include "cyka/csdata/weapons.hpp"
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <span>
 #include <utility>
 
 namespace cyka::aim {
 namespace {
 
-constexpr int kSprayMinBurst = 3;
-constexpr int kSprayGapTicks = 16;
+constexpr int SPRAY_MIN_BURST = 3;
+constexpr int SPRAY_GAP_TICKS = 16;
+constexpr double DEG_HALF_CIRCLE = 180.0;
+constexpr double DEG_FULL_CIRCLE = 360.0;
+constexpr double SPRAY_ACC_PERCENT = 100.0;
 
-[[nodiscard]] double angle_delta(double a, double b) {
-    double d = a - b;
-    while (d > 180) {
-        d -= 360;
+[[nodiscard]] double angleDelta(double angle_a, double angle_b) {
+    double delta = angle_a - angle_b;
+    while (delta > DEG_HALF_CIRCLE) {
+        delta -= DEG_FULL_CIRCLE;
     }
-    while (d < -180) {
-        d += 360;
+    while (delta < -DEG_HALF_CIRCLE) {
+        delta += DEG_FULL_CIRCLE;
     }
-    return d;
+    return delta;
 }
 
-[[nodiscard]] PlayerAim& ensure_aim(Player& p) {
-    if (!p.aim) {
-        p.aim = PlayerAim{};
+[[nodiscard]] PlayerAim& ensureAim(Player& player) {
+    if (!player.aim) {
+        player.aim = PlayerAim{};
     }
-    return *p.aim;
+    return *player.aim;
 }
 
 /// Rebuild display path from mean steps so unequal spray lengths don't teleport.
-void rebuild_path_from_steps(SprayPattern& sp) {
-    double ax = 0;
-    double ay = 0;
-    for (auto& b : sp.bullets) {
-        ax += b.step_x;
-        ay += b.step_y;
-        b.actual_x = ax;
-        b.actual_y = ay;
+void rebuildPathFromSteps(SprayPattern& pattern) {
+    double acc_x = 0;
+    double acc_y = 0;
+    for (auto& bullet : pattern.bullets) {
+        acc_x += bullet.step_x;
+        acc_y += bullet.step_y;
+        bullet.actual_x = acc_x;
+        bullet.actual_y = acc_y;
     }
 }
 
 } // namespace
 
-void spray_enrich(Match& match, std::vector<ShotSample> shots) {
-    std::sort(shots.begin(), shots.end(), [](const ShotSample& a, const ShotSample& b) {
-        if (a.steam_id != b.steam_id) {
-            return a.steam_id < b.steam_id;
+void sprayEnrich(Match& match, std::vector<ShotSample> shots) {
+    std::ranges::sort(shots, [](const ShotSample& left, const ShotSample& right) {
+        if (left.steam_id != right.steam_id) {
+            return left.steam_id < right.steam_id;
         }
-        return a.tick < b.tick;
+        return left.tick < right.tick;
     });
 
     std::vector<ShotSample> cur;
     auto flush = [&]() {
-        if (static_cast<int>(cur.size()) < kSprayMinBurst) {
+        if (static_cast<int>(cur.size()) < SPRAY_MIN_BURST) {
             cur.clear();
             return;
         }
-        const ShotSample& s0 = cur.front();
-        if (!csdata::is_spray_weapon(s0.weapon)) {
+        const ShotSample& first_shot = cur.front();
+        if (!csdata::isSprayWeapon(first_shot.weapon)) {
             cur.clear();
             return;
         }
-        const auto pat = csdata::spray_pattern(s0.weapon, s0.scoped, s0.silenced);
-        if (!pat.data || pat.size == 0) {
+        const auto PAT_SPAN_FULL =
+            csdata::sprayPattern(first_shot.weapon, first_shot.scoped, first_shot.silenced);
+        if (PAT_SPAN_FULL.data == nullptr || PAT_SPAN_FULL.size == 0) {
             cur.clear();
             return;
         }
-        auto pit = match.players.find(s0.steam_id);
-        if (pit == match.players.end()) {
+        const std::span<const csdata::SprayPoint> PAT_SPAN(PAT_SPAN_FULL.data, PAT_SPAN_FULL.size);
+        auto piter = match.players.find(first_shot.steam_id);
+        if (piter == match.players.end()) {
             cur.clear();
             return;
         }
-        auto& aim = ensure_aim(pit->second);
-        SprayPattern* sp = nullptr;
-        for (auto& p : aim.spray_patterns) {
-            if (p.weapon == s0.weapon && p.scoped == s0.scoped && p.silencer_on == s0.silenced) {
-                sp = &p;
+        auto& aim = ensureAim(piter->second);
+        SprayPattern* pattern_ptr = nullptr;
+        for (auto& pattern : aim.spray_patterns) {
+            if (pattern.weapon == first_shot.weapon && pattern.scoped == first_shot.scoped &&
+                pattern.silencer_on == first_shot.silenced) {
+                pattern_ptr = &pattern;
                 break;
             }
         }
-        if (sp == nullptr) {
-            aim.spray_patterns.push_back(
-                SprayPattern{s0.weapon, s0.scoped, s0.silenced, 0, 0.0, {}});
-            sp = &aim.spray_patterns.back();
+        if (pattern_ptr == nullptr) {
+            aim.spray_patterns.push_back(SprayPattern{
+                .weapon = first_shot.weapon,
+                .scoped = first_shot.scoped,
+                .silencer_on = first_shot.silenced,
+                .sprays = 0,
+                .avg_deviation = 0.0,
+                .bullets = {}});
+            pattern_ptr = &aim.spray_patterns.back();
         }
-        ++sp->sprays;
+        ++pattern_ptr->sprays;
         int hits = 0;
         double dev_sum = 0;
-        int n_dev = 0;
+        int num_dev = 0;
         double prev_dx = 0;
         double prev_dy = 0;
-        for (std::size_t i = 0; i < cur.size(); ++i) {
-            const auto& s = cur[i];
-            if (s.hit) {
+        for (std::size_t idx = 0; idx < cur.size(); ++idx) {
+            const auto& shot = cur[idx];
+            if (shot.hit) {
                 ++hits;
             }
-            int ri = s.recoil_idx >= 0 ? s.recoil_idx : static_cast<int>(i);
-            const double dx = angle_delta(s.yaw, cur[0].yaw);
-            const double dy = s.pitch - cur[0].pitch;
-            if (ri < 0 || static_cast<std::size_t>(ri) >= pat.size) {
-                prev_dx = dx;
-                prev_dy = dy;
+            const int RECOIL_IDX = shot.recoil_idx >= 0 ? shot.recoil_idx : static_cast<int>(idx);
+            const double DELTA_X = angleDelta(shot.yaw, cur[0].yaw);
+            const double DELTA_Y = shot.pitch - cur[0].pitch;
+            if (RECOIL_IDX < 0 || std::cmp_greater_equal(RECOIL_IDX, PAT_SPAN.size())) {
+                prev_dx = DELTA_X;
+                prev_dy = DELTA_Y;
                 continue;
             }
-            const auto& pat_pt = pat.data[static_cast<std::size_t>(ri)];
+            const auto& pat_pt = PAT_SPAN[static_cast<std::size_t>(RECOIL_IDX)];
             // Ideal = negated pattern = mouse compensation that cancels recoil
             // (same as demolens). Tables are pattern-space; consumers may ×2 for GOTV.
-            const double ix = -pat_pt.x;
-            const double iy = -pat_pt.y;
-            dev_sum += std::hypot(dx - ix, dy - iy);
-            ++n_dev;
-            while (static_cast<int>(sp->bullets.size()) <= ri) {
-                sp->bullets.push_back(SprayBullet{static_cast<int>(sp->bullets.size())});
+            const double IDEAL_X = -pat_pt.delta_x;
+            const double IDEAL_Y = -pat_pt.delta_y;
+            dev_sum += std::hypot(DELTA_X - IDEAL_X, DELTA_Y - IDEAL_Y);
+            ++num_dev;
+            while (std::cmp_less_equal(pattern_ptr->bullets.size(), RECOIL_IDX)) {
+                pattern_ptr->bullets.push_back(
+                    SprayBullet{.i = static_cast<int>(pattern_ptr->bullets.size())});
             }
-            auto& b = sp->bullets[static_cast<std::size_t>(ri)];
-            b.i = ri;
-            b.ideal_x = ix;
-            b.ideal_y = iy;
+            auto& bullet = pattern_ptr->bullets[static_cast<std::size_t>(RECOIL_IDX)];
+            bullet.i = RECOIL_IDX;
+            bullet.ideal_x = IDEAL_X;
+            bullet.ideal_y = IDEAL_Y;
             // Average the step into this shot, then rebuild the polyline.
-            const double sx = dx - prev_dx;
-            const double sy = dy - prev_dy;
-            b.step_x = (b.step_x * b.n + sx) / (b.n + 1);
-            b.step_y = (b.step_y * b.n + sy) / (b.n + 1);
-            ++b.n;
-            prev_dx = dx;
-            prev_dy = dy;
+            const double STEP_X = DELTA_X - prev_dx;
+            const double STEP_Y = DELTA_Y - prev_dy;
+            bullet.step_x = ((bullet.step_x * bullet.n) + STEP_X) / (bullet.n + 1);
+            bullet.step_y = ((bullet.step_y * bullet.n) + STEP_Y) / (bullet.n + 1);
+            ++bullet.n;
+            prev_dx = DELTA_X;
+            prev_dy = DELTA_Y;
         }
-        rebuild_path_from_steps(*sp);
-        if (n_dev > 0) {
-            const double avg = dev_sum / n_dev;
-            sp->avg_deviation =
-                (sp->avg_deviation * (sp->sprays - 1) + avg) / static_cast<double>(sp->sprays);
+        rebuildPathFromSteps(*pattern_ptr);
+        if (num_dev > 0) {
+            const double AVG_DEV = dev_sum / num_dev;
+            pattern_ptr->avg_deviation =
+                ((pattern_ptr->avg_deviation * (pattern_ptr->sprays - 1)) + AVG_DEV) /
+                static_cast<double>(pattern_ptr->sprays);
         }
-        const double acc = 100.0 * hits / static_cast<double>(cur.size());
-        auto& sw = aim.spray_weapons[s0.weapon];
-        ++sw.sprays;
-        sw.accuracy_pct =
-            (sw.accuracy_pct * (sw.sprays - 1) + acc) / static_cast<double>(sw.sprays);
+        const double ACCURACY = SPRAY_ACC_PERCENT * hits / static_cast<double>(cur.size());
+        auto& spray_weapon = aim.spray_weapons[first_shot.weapon];
+        ++spray_weapon.sprays;
+        spray_weapon.accuracy_pct =
+            ((spray_weapon.accuracy_pct * (spray_weapon.sprays - 1)) + ACCURACY) /
+            static_cast<double>(spray_weapon.sprays);
         cur.clear();
     };
 
-    for (auto& s : shots) {
+    for (auto& shot : shots) {
         if (cur.empty()) {
-            cur.push_back(std::move(s));
+            cur.push_back(std::move(shot));
             continue;
         }
         const auto& prev = cur.back();
-        if (s.steam_id != prev.steam_id || s.weapon != prev.weapon ||
-            s.tick - prev.tick > kSprayGapTicks) {
+        if (shot.steam_id != prev.steam_id || shot.weapon != prev.weapon ||
+            shot.tick - prev.tick > SPRAY_GAP_TICKS) {
             flush();
-            cur.push_back(std::move(s));
+            cur.push_back(std::move(shot));
             continue;
         }
-        cur.push_back(std::move(s));
+        cur.push_back(std::move(shot));
     }
     flush();
 
-    for (auto& [_, p] : match.players) {
-        if (!p.aim || p.aim->spray_weapons.empty()) {
+    for (auto& [steam_id, player] : match.players) {
+        (void)steam_id;
+        if (!player.aim || player.aim->spray_weapons.empty()) {
             continue;
         }
         double sum = 0;
-        int n = 0;
-        for (const auto& [__, sw] : p.aim->spray_weapons) {
-            if (sw.sprays > 0) {
-                sum += sw.accuracy_pct;
-                ++n;
+        int count = 0;
+        for (const auto& [weapon_name, spray_weapon] : player.aim->spray_weapons) {
+            (void)weapon_name;
+            if (spray_weapon.sprays > 0) {
+                sum += spray_weapon.accuracy_pct;
+                ++count;
             }
         }
-        if (n > 0) {
-            p.aim->spray_accuracy_pct = sum / n;
+        if (count > 0) {
+            player.aim->spray_accuracy_pct = sum / count;
         }
     }
 }
