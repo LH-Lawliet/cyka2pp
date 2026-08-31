@@ -9,6 +9,8 @@ on:
 env:
   # Keep format/tidy on a modern Clang; Ubuntu apt clang-18 is too old for this tree.
   LLVM_VERSION: "22"
+  # Match local Fedora toolchain (#embed / C++26); Ubuntu 24.04 default is still 14.
+  GCC_VERSION: "16"
 
 jobs:
   format:
@@ -76,14 +78,16 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          # g++-14: full libstdc++ with std::expected (C++23/26)
-          sudo apt-get install -y cmake ninja-build g++-14
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build "g++-${GCC_VERSION}"
 
       - name: Configure (x86-64-v2, fetched deps, static libstdc++)
         run: |
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_CXX_COMPILER="g++-${GCC_VERSION}" \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCYKA_FETCH_DEPS=ON \
             -DCYKA_STATIC=ON \

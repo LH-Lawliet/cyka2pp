@@ -162,8 +162,8 @@ set(CYKA_SPRAY_SOURCES
     src/csdata/spray_scoped.cpp
     src/csdata/spray_nosil.cpp
 )
-# Portable spray tables use generated/*.inc (g++-14 has no #embed).
-target_include_directories(cyka_core PRIVATE ${CMAKE_SOURCE_DIR}/src/csdata)
+# #embed is accepted as a C23/Clang extension under -Wpedantic on several toolchains.
+set_source_files_properties(${CYKA_SPRAY_SOURCES} PROPERTIES COMPILE_OPTIONS "-Wno-c23-extensions")
 
 add_executable(cyka2pp src/main.cpp)
 target_link_libraries(cyka2pp PRIVATE cyka_core)

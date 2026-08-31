@@ -2,40 +2,58 @@
 #include "cyka/csdata/spray_tables_internal.hpp"
 
 namespace cyka::csdata::detail {
-
-#include "generated/bs_0.inc"
-#include "generated/bs_1.inc"
-#include "generated/bs_2.inc"
-#include "generated/bs_3.inc"
-#include "generated/bs_4.inc"
-#include "generated/bs_5.inc"
-#include "generated/bs_6.inc"
-
 namespace {
 
 inline constexpr std::size_t SPRAY_POINTS_SHORT = 20;
 inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
 
 SpraySpan sprayMac10() {
-    return embedSpray<SPRAY_POINTS_SHORT>(BS_0_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_0.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
 }
+
 SpraySpan sprayMp5Sd() {
-    return embedSpray<SPRAY_POINTS_SHORT>(BS_1_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_1.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
 }
+
 SpraySpan sprayMp7() {
-    return embedSpray<SPRAY_POINTS_SHORT>(BS_2_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_2.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
 }
+
 SpraySpan sprayMp9() {
-    return embedSpray<SPRAY_POINTS_SHORT>(BS_3_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_3.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
 }
+
 SpraySpan sprayP90() {
-    return embedSpray<SPRAY_POINTS_SHORT>(BS_4_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_4.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
 }
+
 SpraySpan sprayPpBizon() {
-    return embedSpray<SPRAY_POINTS_LONG>(BS_5_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+#embed "generated/bs_5.bin"
+    };
+    return embedSpray<SPRAY_POINTS_LONG>(RAW);
 }
+
 SpraySpan sprayUmp45() {
-    return embedSpray<SPRAY_POINTS_SHORT>(BS_6_RAW);
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+#embed "generated/bs_6.bin"
+    };
+    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
 }
 
 } // namespace
