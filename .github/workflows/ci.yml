@@ -64,8 +64,8 @@ jobs:
             -DCYKA_STATIC=OFF \
             -DCYKA_MARCH=x86-64-v2
 
-      - name: Build deps / generate objects for compile DB consumers
-        run: cmake --build build -j"$(nproc)" --target cyka_core
+      - name: Build (compile DB + .modmap for tidy)
+        run: cmake --build build -j"$(nproc)"
 
       - name: clang-tidy (warnings as errors)
         run: cmake --build build --target cyka_tidy
