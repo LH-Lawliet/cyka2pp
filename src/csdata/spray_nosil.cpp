@@ -2,15 +2,15 @@
 #include "cyka/csdata/spray_tables_internal.hpp"
 
 namespace cyka::csdata::detail {
+
+#include "generated/nosil_0.inc"
+
 namespace {
 
 inline constexpr std::size_t SPRAY_POINTS_SHORT = 20;
 
 SpraySpan sprayM4a1Nosil() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
-#embed "generated/nosil_0.bin"
-    };
-    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+    return embedSpray<SPRAY_POINTS_SHORT>(NOSIL_0_RAW);
 }
 
 } // namespace

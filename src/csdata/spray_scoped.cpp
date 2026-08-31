@@ -2,22 +2,19 @@
 #include "cyka/csdata/spray_tables_internal.hpp"
 
 namespace cyka::csdata::detail {
+
+#include "generated/scoped_0.inc"
+#include "generated/scoped_1.inc"
+
 namespace {
 
 inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
 
 SpraySpan sprayAugScoped() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
-#embed "generated/scoped_0.bin"
-    };
-    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+    return embedSpray<SPRAY_POINTS_LONG>(SCOPED_0_RAW);
 }
-
 SpraySpan spraySg553Scoped() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
-#embed "generated/scoped_1.bin"
-    };
-    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+    return embedSpray<SPRAY_POINTS_LONG>(SCOPED_1_RAW);
 }
 
 } // namespace
