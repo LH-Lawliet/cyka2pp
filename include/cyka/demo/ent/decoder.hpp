@@ -33,7 +33,7 @@ enum class DecOp : std::uint8_t {
     QAngleCoord,
     QAngleBits,
     QAnglePrecise,
-    PolyBase, // bool + polymorphic serializer index
+    PolyBase, // bool, then ubitvar type index only if the pointer is active
 };
 
 /// A resolved decoder. `sub`/`qf` carry the scalar flavour for vector fields.

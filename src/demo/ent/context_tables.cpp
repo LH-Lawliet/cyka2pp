@@ -21,6 +21,14 @@ const EntSerializer* EntityContext::serializer_for(const std::string& name) cons
     return it == serializers_.end() ? nullptr : it->second;
 }
 
+void EntityContext::bind_poly_count(EntClass* cls) {
+    if (cls == nullptr || cls->serializer == nullptr) {
+        return;
+    }
+    const int m = cls->serializer->max_poly_id();
+    cls->poly_count = m >= 0 ? m + 1 : 0;
+}
+
 void EntityContext::on_send_tables(std::span<const std::uint8_t> body) {
     const auto data = cyka::demo::find_bytes_field(body, 1);
     if (data.empty()) {
@@ -55,6 +63,7 @@ void EntityContext::register_class(std::int32_t class_id, std::string name) {
     cls->class_id = class_id;
     cls->name = std::move(name);
     cls->serializer = serializer_for(cls->name);
+    bind_poly_count(cls.get());
     EntClass* raw = cls.get();
     class_pool_.push_back(std::move(cls));
     classes_by_id_[class_id] = raw;

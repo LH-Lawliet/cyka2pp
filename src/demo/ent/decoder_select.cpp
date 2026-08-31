@@ -59,6 +59,16 @@ DecoderSpec qangle_factory(const EntField& f) {
         return simple(DecOp::QAnglePrecise);
     }
     if (f.bit_count && *f.bit_count != 0) {
+        // 32-bit (or wider) components are noscale IEEE float32s, not scaled
+        // bit-angles. read_angle(32) would map the raw bits into [0,360) and
+        // garble m_aimPunchAngle / similar. Mirror float_factory's noscale guard.
+        if (*f.bit_count >= 32) {
+            DecoderSpec s;
+            s.op = DecOp::Vector;
+            s.sub = DecOp::NoScale;
+            s.comps = 3;
+            return s;
+        }
         DecoderSpec s;
         s.op = DecOp::QAngleBits;
         s.bits = static_cast<std::uint32_t>(*f.bit_count);

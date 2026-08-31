@@ -17,7 +17,7 @@ namespace cyka::demo::ent {
 
 /// Owns send-table metadata plus the live entity set for one demo.
 class EntityContext {
-public:
+  public:
     /// CSVCMsg_ServerInfo — supplies max_classes, needed for class-id bit width.
     void on_server_info(std::span<const std::uint8_t> msg);
     /// CDemoSendTables body (field 1 = varint-prefixed CSVCMsg_FlattenedSerializer).
@@ -42,12 +42,13 @@ public:
     [[nodiscard]] std::size_t entity_count() const noexcept { return entities_.size(); }
     [[nodiscard]] std::size_t failures() const noexcept { return failures_; }
 
-private:
+  private:
     void load_flattened(std::span<const std::uint8_t> msg);
     void register_class(std::int32_t class_id, std::string name);
     [[nodiscard]] const EntSerializer* serializer_for(const std::string& name) const;
     EntField* make_field(std::span<const std::uint8_t> msg,
                          const std::vector<std::string>& symbols);
+    void bind_poly_count(EntClass* cls);
 
     std::vector<std::unique_ptr<EntSerializer>> serializer_pool_;
     std::unordered_map<std::string, EntSerializer*> serializers_;
@@ -61,6 +62,7 @@ private:
     mutable bool tracked_dirty_{true};
     std::vector<FieldPath> path_scratch_;
     std::uint32_t class_id_bits_{0};
+    int next_poly_id_{0};
     int full_packets_{0};
     std::size_t failures_{0};
 };

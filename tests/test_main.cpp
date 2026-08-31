@@ -10,6 +10,7 @@ int main() {
     test_corpus();
     test_ttd_trace();
     test_steam_id();
+    test_ent_decode();
     std::cout << "passed=" << cyka::test::g_passed << " failed=" << cyka::test::g_failed << '\n';
     return cyka::test::g_failed == 0 ? 0 : 1;
 }

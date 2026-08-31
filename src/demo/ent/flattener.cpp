@@ -52,6 +52,7 @@ EntField* EntityContext::make_field(std::span<const std::uint8_t> msg,
     };
 
     ByteReader r(msg);
+    std::vector<std::string> poly_names;
     while (auto fld = cyka::demo::read_field(r)) {
         switch (fld->field) {
         case 1:
@@ -90,7 +91,7 @@ EntField* EntityContext::make_field(std::span<const std::uint8_t> msg,
                 ByteReader pr(fld->bytes);
                 while (auto pf = cyka::demo::read_field(pr)) {
                     if (pf->field == 1 && pf->wire == kWireVarint) {
-                        f->poly_types.push_back(serializer_for(sym(pf->varint)));
+                        poly_names.push_back(sym(pf->varint));
                     }
                 }
             }
@@ -110,11 +111,25 @@ EntField* EntityContext::make_field(std::span<const std::uint8_t> msg,
     if (!f->serializer_name.empty()) {
         f->serializer = serializer_for(f->serializer_name);
     }
+    if (!poly_names.empty()) {
+        // Combined slice: [0] = default serializer, [1..N] = alternatives.
+        // The ubitvar on the wire is a direct index into this slice.
+        f->poly_types.resize(poly_names.size() + 1);
+        f->poly_types[0] = f->serializer;
+        for (std::size_t i = 0; i < poly_names.size(); ++i) {
+            f->poly_types[i + 1] = serializer_for(poly_names[i]);
+        }
+        f->poly_serializer_id = next_poly_id_++;
+    }
 
     FieldModel model = FieldModel::Simple;
-    if (f->serializer != nullptr) {
-        model = (f->type->pointer || is_pointer_type(f->type->base)) ? FieldModel::FixedTable
-                                                                    : FieldModel::VariableTable;
+    if (f->serializer != nullptr || !f->poly_types.empty()) {
+        if ((f->type != nullptr && (f->type->pointer || is_pointer_type(f->type->base))) ||
+            !f->poly_types.empty()) {
+            model = FieldModel::FixedTable;
+        } else {
+            model = FieldModel::VariableTable;
+        }
     } else if (f->type->count > 0 && f->type->base != "char") {
         model = FieldModel::FixedArray;
     } else if (f->type->base == "CUtlVector" || f->type->base == "CNetworkUtlVectorBase") {
@@ -166,7 +181,8 @@ void EntityContext::load_flattened(std::span<const std::uint8_t> msg) {
             }
             auto it = by_index.find(i);
             if (it == by_index.end()) {
-                it = by_index.emplace(i, make_field(field_msgs[static_cast<std::size_t>(i)], symbols))
+                it = by_index
+                         .emplace(i, make_field(field_msgs[static_cast<std::size_t>(i)], symbols))
                          .first;
             }
             ser->add_field(it->second);
@@ -176,6 +192,7 @@ void EntityContext::load_flattened(std::span<const std::uint8_t> msg) {
         serializers_[raw->name] = raw;
         if (const auto ci = classes_by_name_.find(raw->name); ci != classes_by_name_.end()) {
             ci->second->serializer = raw;
+            bind_poly_count(ci->second);
         }
     }
 }

@@ -20,9 +20,13 @@ inline constexpr std::uint64_t kInvalidHandle = (1ULL << (kMaxEdictBits + 10)) -
 /// One networked entity. State is only retained for `tracked` entities; all
 /// others are still decoded (the bitstream is shared) but their values dropped.
 class Entity {
-public:
+  public:
     Entity(std::int32_t index, std::int32_t serial, const EntClass* cls)
-        : index_(index), serial_(serial), cls_(cls) {}
+        : index_(index), serial_(serial), cls_(cls) {
+        if (cls != nullptr && cls->poly_count > 0) {
+            poly_serializers_.assign(static_cast<std::size_t>(cls->poly_count), nullptr);
+        }
+    }
 
     [[nodiscard]] std::int32_t index() const noexcept { return index_; }
     [[nodiscard]] std::int32_t serial() const noexcept { return serial_; }
@@ -54,13 +58,16 @@ public:
         return v == nullptr ? std::nullopt : std::optional{v->as_u64()};
     }
 
-private:
+  private:
+    void apply_poly(int id, const EntSerializer* ser);
+
     std::int32_t index_{0};
     std::int32_t serial_{0};
     const EntClass* cls_{nullptr};
     bool active_{true};
     bool tracked_{false};
     std::unordered_map<std::uint64_t, EntValue> state_;
+    std::vector<const EntSerializer*> poly_serializers_;
 };
 
 } // namespace cyka::demo::ent

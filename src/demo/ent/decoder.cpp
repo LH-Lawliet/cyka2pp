@@ -58,9 +58,13 @@ EntValue decode_value(const DecoderSpec& spec, BitStream& r) {
     case DecOp::Component:
         return EntValue::of_uint(r.read_bits(1));
     case DecOp::PolyBase: {
-        const bool b = r.read_bool();
+        // Inactive pointer is a single false bit. The ubitvar type index is
+        // only present when the pointer is active (demoinfocs / Clarity).
+        if (!r.read_bool()) {
+            return EntValue::of_bool(false);
+        }
         EntValue v = EntValue::of_uint(r.read_ubit_var());
-        v.b = b;
+        v.b = true;
         return v;
     }
     case DecOp::Vec3Normal:
