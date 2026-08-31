@@ -3,19 +3,25 @@
 #include <cstdio>
 #include <fcntl.h>
 #include <memory>
-#include <utility>
-
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
 
 namespace cyka::demo {
 namespace {
 
+struct FileCloser {
+    void operator()(std::FILE* file) const noexcept {
+        if (file != nullptr) {
+            std::fclose(file);
+        }
+    }
+};
+
 [[nodiscard]] int openReadOnly(const std::filesystem::path& path) {
     // Prefer fopen+fcntl over open/openat/syscall: those are vararg APIs.
-    const std::unique_ptr<std::FILE, decltype(&std::fclose)> STREAM(
-        std::fopen(path.c_str(), "rbe"), &std::fclose);
+    const std::unique_ptr<std::FILE, FileCloser> STREAM(std::fopen(path.c_str(), "rbe"));
     if (STREAM == nullptr) {
         return -1;
     }

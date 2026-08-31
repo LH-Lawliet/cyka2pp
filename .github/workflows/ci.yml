@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  # Keep format/tidy on a modern Clang; Ubuntu apt clang-18 is too old for this tree.
+  LLVM_VERSION: "22"
+
 jobs:
   format:
     runs-on: ubuntu-24.04
@@ -14,15 +18,19 @@ jobs:
 
       - name: Install clang-format
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-toolchain.list
           sudo apt-get update
-          sudo apt-get install -y clang-format-18
+          sudo apt-get install -y "clang-format-${LLVM_VERSION}"
 
       - name: Check formatting
         run: |
           mapfile -d '' files < <(
             find include src tests \( -name '*.hpp' -o -name '*.cpp' \) -print0
           )
-          clang-format-18 --dry-run --Werror "${files[@]}"
+          "clang-format-${LLVM_VERSION}" --dry-run --Werror "${files[@]}"
 
   tidy:
     runs-on: ubuntu-24.04
@@ -32,16 +40,23 @@ jobs:
 
       - name: Install toolchain
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-toolchain.list
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build clang-18 clang-tidy-18 clang-tools-18
-          sudo ln -sf "$(command -v clang-tidy-18)" /usr/local/bin/clang-tidy
-          sudo ln -sf "$(command -v run-clang-tidy-18)" /usr/local/bin/run-clang-tidy
+          sudo apt-get install -y cmake ninja-build \
+            "clang-${LLVM_VERSION}" \
+            "clang-tidy-${LLVM_VERSION}" \
+            "clang-tools-${LLVM_VERSION}"
+          sudo ln -sf "$(command -v "clang-tidy-${LLVM_VERSION}")" /usr/local/bin/clang-tidy
+          sudo ln -sf "$(command -v "run-clang-tidy-${LLVM_VERSION}")" /usr/local/bin/run-clang-tidy
 
       - name: Configure (compile_commands for tidy)
         run: |
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCYKA_FETCH_DEPS=ON \
             -DCYKA_STATIC=OFF \

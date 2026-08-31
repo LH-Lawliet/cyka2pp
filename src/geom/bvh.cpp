@@ -70,12 +70,13 @@ void Mesh::buildBvh() {
         bool split{false};
     };
     std::vector<BuildFrame> stack;
-    stack.push_back({.start = 0,
-                     .end = NUM_TRIS,
-                     .parent_idx = -1,
-                     .right_child = false,
-                     .node_idx = -1,
-                     .split = false});
+    stack.push_back(
+        {.start = 0,
+         .end = NUM_TRIS,
+         .parent_idx = -1,
+         .right_child = false,
+         .node_idx = -1,
+         .split = false});
     while (!stack.empty()) {
         BuildFrame& frame = stack.back();
         if (!frame.split) {
@@ -123,18 +124,20 @@ void Mesh::buildBvh() {
             });
             const int MID = (START + END) / BVH_CHILDREN;
             frame.split = true;
-            stack.push_back({.start = MID,
-                             .end = END,
-                             .parent_idx = NODE_IDX,
-                             .right_child = true,
-                             .node_idx = -1,
-                             .split = false});
-            stack.push_back({.start = START,
-                             .end = MID,
-                             .parent_idx = NODE_IDX,
-                             .right_child = false,
-                             .node_idx = -1,
-                             .split = false});
+            stack.push_back(
+                {.start = MID,
+                 .end = END,
+                 .parent_idx = NODE_IDX,
+                 .right_child = true,
+                 .node_idx = -1,
+                 .split = false});
+            stack.push_back(
+                {.start = START,
+                 .end = MID,
+                 .parent_idx = NODE_IDX,
+                 .right_child = false,
+                 .node_idx = -1,
+                 .split = false});
         } else {
             stack.pop_back();
         }

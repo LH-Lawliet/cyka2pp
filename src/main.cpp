@@ -23,8 +23,8 @@ void applyThreadEnvOverride() {
     if (!env_file) {
         return;
     }
-    std::vector<char> blob((std::istreambuf_iterator<char>(env_file)),
-                           std::istreambuf_iterator<char>());
+    std::vector<char> blob(
+        (std::istreambuf_iterator<char>(env_file)), std::istreambuf_iterator<char>());
     if (blob.empty()) {
         return;
     }

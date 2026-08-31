@@ -148,6 +148,11 @@ target_link_libraries(cyka_core PUBLIC
     Threads::Threads
     ${CYKA_SNAPPY_TARGET}
 )
+# Keep third-party headers out of -Werror (e.g. nlohmann std::is_trivial under C++26).
+get_target_property(_cyka_json_inc nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
+if(_cyka_json_inc)
+  target_include_directories(cyka_core SYSTEM PUBLIC ${_cyka_json_inc})
+endif()
 target_link_libraries(cyka_core PRIVATE meshoptimizer)
 
 set(CYKA_SPRAY_SOURCES
@@ -157,9 +162,8 @@ set(CYKA_SPRAY_SOURCES
     src/csdata/spray_scoped.cpp
     src/csdata/spray_nosil.cpp
 )
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
-  set_source_files_properties(${CYKA_SPRAY_SOURCES} PROPERTIES COMPILE_OPTIONS "-Wno-c23-extensions")
-endif()
+# #embed is accepted as a C23/Clang extension under -Wpedantic on several toolchains.
+set_source_files_properties(${CYKA_SPRAY_SOURCES} PROPERTIES COMPILE_OPTIONS "-Wno-c23-extensions")
 
 add_executable(cyka2pp src/main.cpp)
 target_link_libraries(cyka2pp PRIVATE cyka_core)
