@@ -179,6 +179,7 @@ add_executable(cyka2pp-tests
     tests/test_corpus.cpp
     tests/test_ttd_trace.cpp
     tests/test_steam_id.cpp
+    tests/test_userid.cpp
     tests/test_ent_decode.cpp
 )
 target_link_libraries(cyka2pp-tests PRIVATE cyka_core)

@@ -1,5 +1,5 @@
 {
-  "notes": "Large .dem files are gitignored. Run scripts/fetch_corpus.py. Tests skip missing files. Prefer Valve CDN demos (https://cdn.hugorustenholz.fr/<match_id>.dem). kind/rankType: 7=Wingman, 11=Premier, 12=Competitive.",
+  "notes": "Large .dem files are gitignored. Run scripts/fetch_corpus.py. Tests skip missing files. Prefer Valve CDN demos (https://cdn.cykaslayer.com/<match_id>.dem). kind/rankType: 7=Wingman, 11=Premier, 12=Competitive.",
   "demos": [
     {
       "id": "forfeit-surrender-inferno",
@@ -11,7 +11,9 @@
       "scoreB": 0,
       "rounds": 2,
       "expectEndReason": "surrender",
-      "urls": ["https://cdn.hugorustenholz.fr/3839591702666936685.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3839591702666936685.dem"
+      ]
     },
     {
       "id": "short-abandon-mirage",
@@ -23,7 +25,9 @@
       "scoreB": 3,
       "rounds": 3,
       "expectEndReason": "surrender",
-      "urls": ["https://cdn.hugorustenholz.fr/3816915961118720323.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3816915961118720323.dem"
+      ]
     },
     {
       "id": "competitive-nuke-11-13",
@@ -36,7 +40,9 @@
       "scoreB": 13,
       "rounds": 24,
       "minKills": 100,
-      "urls": ["https://cdn.hugorustenholz.fr/3835689269611987518.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3835689269611987518.dem"
+      ]
     },
     {
       "id": "premier-overtime-dust2",
@@ -48,7 +54,9 @@
       "scoreA": 14,
       "scoreB": 16,
       "rounds": 30,
-      "urls": ["https://cdn.hugorustenholz.fr/3824744984272175294.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3824744984272175294.dem"
+      ]
     },
     {
       "id": "wingman-inferno",
@@ -61,7 +69,9 @@
       "scoreB": 9,
       "rounds": 16,
       "maxPlayers": 5,
-      "urls": ["https://cdn.hugorustenholz.fr/3839586692587585615.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3839586692587585615.dem"
+      ]
     },
     {
       "id": "wingman-debris",
@@ -74,7 +84,9 @@
       "scoreB": 7,
       "rounds": 16,
       "maxPlayers": 5,
-      "urls": ["https://cdn.hugorustenholz.fr/3836023995740717247.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3836023995740717247.dem"
+      ]
     },
     {
       "id": "teamkill-heavy-anubis",
@@ -86,7 +98,9 @@
       "scoreB": 3,
       "rounds": 16,
       "minSameTeamKills": 5,
-      "urls": ["https://cdn.hugorustenholz.fr/3821766067970113638.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3821766067970113638.dem"
+      ]
     },
     {
       "id": "suicide-roster-inferno",
@@ -99,7 +113,9 @@
       "rounds": 14,
       "maxPlayers": 5,
       "minSelfKills": 2,
-      "urls": ["https://cdn.hugorustenholz.fr/3827142806531473757.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3827142806531473757.dem"
+      ]
     },
     {
       "id": "world-damage-dust2",
@@ -112,7 +128,9 @@
       "scoreB": 13,
       "rounds": 17,
       "minEmptyKillerKills": 3,
-      "urls": ["https://cdn.hugorustenholz.fr/3825296853209972850.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3825296853209972850.dem"
+      ]
     },
     {
       "id": "hostage-office",
@@ -124,7 +142,29 @@
       "scoreA": 13,
       "scoreB": 11,
       "rounds": 24,
-      "urls": ["https://cdn.hugorustenholz.fr/3819662865434935609.dem"]
+      "urls": [
+        "https://cdn.cykaslayer.com/3819662865434935609.dem"
+      ]
+    },
+    {
+      "id": "kick-roster-mirage",
+      "file": "3840331016862433468.dem",
+      "kind": "kick",
+      "why": "Player RaKLo:) was kicked mid-match. Roster must keep the kicked player AND the remaining 5v5 (Rillettes2Panard was dropped; their events were merged into another player via userid/slot collision).",
+      "map": "de_mirage",
+      "scoreA": 6,
+      "scoreB": 13,
+      "rounds": 19,
+      "minPlayers": 10,
+      "maxPlayers": 10,
+      "expectNames": [
+        "RaKLo:)",
+        "Rillettes2Panard"
+      ],
+      "maxDeaths": 19,
+      "urls": [
+        "https://cdn.cykaslayer.com/3840331016862433468.dem"
+      ]
     },
     {
       "id": "hltv-vitality-spirit-iem-katowice-2025-nuke",
@@ -134,7 +174,9 @@
       "minRounds": 16,
       "why": "Optional pro GOTV demo (external URL; skipped if missing).",
       "source": "https://www.hltv.org/matches/2378917/vitality-vs-spirit-iem-katowice-2025",
-      "urls": ["https://figshare.com/ndownloader/files/52429013"]
+      "urls": [
+        "https://figshare.com/ndownloader/files/52429013"
+      ]
     }
   ]
 }

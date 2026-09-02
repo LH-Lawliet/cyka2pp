@@ -14,6 +14,17 @@ inline constexpr std::size_t PLAYER_NAME_MAX = 128;
 inline constexpr unsigned ASCII_SPACE = 0x20U;
 inline constexpr unsigned ASCII_DEL = 0x7FU;
 
+inline constexpr std::int32_t INVALID_USERID = 65535;
+
+/// CS2 game-event userids are 16-bit. Sign-extended entity ints (e.g. -253)
+/// decode back to the unsigned value (65283).
+[[nodiscard]] inline std::int32_t normalizeUserid(std::int64_t raw) noexcept {
+    if (raw < 0) {
+        return static_cast<std::int32_t>(static_cast<std::uint16_t>(raw));
+    }
+    return static_cast<std::int32_t>(raw);
+}
+
 [[nodiscard]] inline bool isIndividualSteam64(std::uint64_t steam_id) noexcept {
     return steam_id >= STEAM_ID64_MIN && steam_id <= STEAM_ID64_MAX;
 }

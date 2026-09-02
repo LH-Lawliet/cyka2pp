@@ -68,6 +68,8 @@ void EntityBridge::onNetMsg(const NetMessage& net_msg) {
     }
     case MSG_PACKET_ENTITIES:
         (void)ctx.onPacketEntities(net_msg.payload);
+        // Publish before later game events in this packet resolve userids.
+        publishPlayers();
         break;
     default:
         break;
@@ -81,6 +83,8 @@ void EntityBridge::publishPlayers() {
             .steam = std::to_string(ident.steam_id),
             .name = ident.name,
             .team = ident.team_num,
+            .user_id = ident.user_id,
+            .slot = ident.slot,
             .mvp_count = ident.mvp_count,
             .rank_type = ident.rank_type,
             .ranking = ident.ranking,

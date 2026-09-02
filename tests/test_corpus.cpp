@@ -95,6 +95,29 @@ void test_corpus() {
             CYKA_CHECK(
                 static_cast<int>(match.players.size()) <= demo_entry["maxPlayers"].get<int>());
         }
+        if (demo_entry.contains("minPlayers")) {
+            CYKA_CHECK(
+                static_cast<int>(match.players.size()) >= demo_entry["minPlayers"].get<int>());
+        }
+        if (demo_entry.contains("expectNames") && demo_entry["expectNames"].is_array()) {
+            for (const auto& name_json : demo_entry["expectNames"]) {
+                const std::string WANT = name_json.get<std::string>();
+                bool found_name = false;
+                for (const auto& [_steam_id, player] : match.players) {
+                    if (player.name.contains(WANT)) {
+                        found_name = true;
+                        break;
+                    }
+                }
+                CYKA_CHECK(found_name);
+            }
+        }
+        if (demo_entry.contains("maxDeaths")) {
+            const int MAX_DEATHS = demo_entry["maxDeaths"].get<int>();
+            for (const auto& [_steam_id, player] : match.players) {
+                CYKA_CHECK(player.death_count <= MAX_DEATHS);
+            }
+        }
         if (demo_entry.contains("rankType")) {
             const int WANT = demo_entry["rankType"].get<int>();
             bool found_rank = false;

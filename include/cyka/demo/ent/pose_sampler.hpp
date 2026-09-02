@@ -14,7 +14,10 @@ struct PlayerIdent {
     std::uint64_t steam_id{0};
     std::string name;
     int team_num{0}; // 2 = T, 3 = CT
-    bool connected{false};
+    /// CCSPlayerController::m_iUserID (game-event userid). 0 if unknown.
+    int user_id{0};
+    /// Player slot (CCSPlayerController entity index - 1). -1 if unknown.
+    int slot{-1};
     /// From CCSPlayerController::m_iMVPs (cumulative in the demo).
     int mvp_count{0};
     /// CS2 competitive mode for this demo: 7=Wingman, 11=Premier, 12=Comp (6=legacy Comp).

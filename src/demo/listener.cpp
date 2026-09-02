@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <utility>
 
 namespace cyka::demo {
@@ -11,9 +12,6 @@ namespace cyka::demo {
 namespace {
 
 inline constexpr double MS_PER_SEC = 1000.0;
-inline constexpr std::int32_t INVALID_USERID = 65535;
-inline constexpr std::uint32_t USERID_BYTE_MASK = 0xffU;
-inline constexpr std::int32_t USERID_SHORT_MAX = 0xffff;
 
 } // namespace
 
@@ -35,57 +33,40 @@ void CollectingListener::setTicks(TickClock clock) {
 
 void CollectingListener::onUserinfo(const UserInfoById& users) {
     this->users = users;
-    for (const auto& [uid, user] : users) {
+    for (const auto& [_uid, user] : users) {
         if (user.xuid == 0 || user.ishltv || user.fakeplayer || !isIndividualSteam64(user.xuid)) {
             continue;
         }
         ensurePlayer(std::to_string(user.xuid), user.name, user.user_id);
+        if (user.slot >= 0) {
+            noteUserid(std::to_string(user.xuid), user.slot);
+        }
     }
 }
 
 SteamId CollectingListener::steamForUserid(std::int32_t userid) const {
-    if (userid < 0 || userid == INVALID_USERID) {
-        return {};
-    }
-    // Match demoinfocs playerByUserID32: low byte is the string-table slot.
-    // Some CS2 players (e.g. reconnect ghosts) report userid 0 but still occupy
-    // userinfo slot 0 with a real xuid — do not treat 0 as "no player".
-    const std::int32_t MASKED =
-        userid <= USERID_SHORT_MAX
-            ? static_cast<std::int32_t>(static_cast<std::uint32_t>(userid) & USERID_BYTE_MASK)
-            : userid;
-
-    auto iter = users.find(MASKED);
-    if (iter != users.end() && isIndividualSteam64(iter->second.xuid) && !iter->second.ishltv) {
-        return std::to_string(iter->second.xuid);
-    }
-    if (userid != 0) {
-        iter = users.find(userid);
-        if (iter != users.end() && isIndividualSteam64(iter->second.xuid)) {
-            return std::to_string(iter->second.xuid);
-        }
-        iter = users.find(MASKED + 1);
-        if (iter != users.end() && isIndividualSteam64(iter->second.xuid)) {
-            return std::to_string(iter->second.xuid);
-        }
-    }
-    return {};
+    return lookupSteamForUserid(users, steam_by_userid, userid);
 }
 
 std::string CollectingListener::nameForUserid(std::int32_t userid) const {
-    if (userid <= 0) {
+    if (userid < 0 || userid == INVALID_USERID) {
         return {};
     }
-    const std::int32_t MASKED =
-        userid <= USERID_SHORT_MAX
-            ? static_cast<std::int32_t>(static_cast<std::uint32_t>(userid) & USERID_BYTE_MASK)
-            : userid;
-    auto iter = users.find(MASKED);
-    if (iter != users.end()) {
-        return iter->second.name;
+    const SteamId SID = steamForUserid(userid);
+    if (SID.empty()) {
+        return {};
     }
-    iter = users.find(userid);
-    return iter == users.end() ? std::string{} : iter->second.name;
+    for (const auto& player : raw().players) {
+        if (player.steam_id == SID && looksLikePlayerName(player.name)) {
+            return player.name;
+        }
+    }
+    for (const auto& [_key, user] : users) {
+        if (std::to_string(user.xuid) == SID && looksLikePlayerName(user.name)) {
+            return user.name;
+        }
+    }
+    return {};
 }
 
 void CollectingListener::ensurePlayer(const SteamId& steam, const std::string& name, int userid) {
@@ -97,9 +78,11 @@ void CollectingListener::ensurePlayer(const SteamId& steam, const std::string& n
             if (looksLikePlayerName(name)) {
                 player.name = name;
             }
-            if (userid != 0) {
+            if (userid != 0 && (player.user_id == 0 ||
+                                (userid >= MAX_USER_SLOTS && player.user_id < MAX_USER_SLOTS))) {
                 player.user_id = userid;
             }
+            noteUserid(steam, userid);
             return;
         }
     }
@@ -107,9 +90,17 @@ void CollectingListener::ensurePlayer(const SteamId& steam, const std::string& n
     player.steam_id = steam;
     player.name = looksLikePlayerName(name) ? name : steam;
     player.user_id = userid;
+    noteUserid(steam, userid);
     // Leave team unset until player_team / finish(); defaulting to "A" kept
     // inactive entity ghosts on the scoreboard.
     raw().players.push_back(std::move(player));
+}
+
+void CollectingListener::noteUserid(const SteamId& steam, int userid) {
+    if (steam.empty() || userid == 0 || userid == INVALID_USERID || !isIndividualSteam64(steam)) {
+        return;
+    }
+    steam_by_userid.try_emplace(userid, steam);
 }
 
 RawPlayer* CollectingListener::findPlayer(const SteamId& steam) {

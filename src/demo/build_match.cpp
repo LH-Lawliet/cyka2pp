@@ -29,9 +29,11 @@ constexpr int REGULATION_ROUNDS = 24;
         })) {
         return true;
     }
-    return std::ranges::any_of(raw.shots, [&](const RawShot& shot) {
-        return shot.shooter_steam == sid;
-    });
+    return std::ranges::any_of(
+               raw.shots, [&](const RawShot& shot) { return shot.shooter_steam == sid; }) ||
+           std::ranges::any_of(raw.poses, [&](const RawPose& pose) {
+               return pose.steam_id == sid;
+           });
 }
 
 } // namespace

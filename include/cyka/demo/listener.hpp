@@ -57,13 +57,24 @@ class CollectingListener {
         SteamId steam;
         std::string name;
         int team{0};
+        int user_id{0};
+        int slot{-1};
         int mvp_count{-1};
         int rank_type{-1};
         int ranking{-1};
         int competitive_wins{-1};
     };
     void observeEntityPlayer(const EntityPlayer& player) {
-        ensurePlayer(player.steam, player.name, 0);
+        if (player.slot >= 0) {
+            noteUserid(player.steam, player.slot);
+        }
+        if (player.user_id != 0) {
+            noteUserid(player.steam, player.user_id);
+        }
+        // m_iConnected is not reliable for every GOTV controller (one player in
+        // the kick demo is T/CT with poses but connected=false and missing from
+        // userinfo). Team is the signal that they belong on the roster.
+        ensurePlayer(player.steam, player.name, player.user_id != 0 ? player.user_id : player.slot);
         noteTeam(player.steam, player.team);
         if (player.mvp_count >= 0) {
             noteMvpCount(player.steam, player.mvp_count);
@@ -95,6 +106,9 @@ class CollectingListener {
     [[nodiscard]] std::string nameForUserid(std::int32_t userid) const;
     void ensurePlayer(const SteamId& steam, const std::string& name, int userid);
     [[nodiscard]] RawPlayer* findPlayer(const SteamId& steam);
+    /// Record game-event userid → steam. First writer wins so a later packed
+    /// userinfo slot cannot steal a kicked / missing player's userid.
+    void noteUserid(const SteamId& steam, int userid);
     /// Pin steam → A|B from CS team 2/3 using the current side_letter_ map.
     void noteTeam(const SteamId& steam, int team);
     /// Keep the highest observed CCSPlayerController::m_iMVPs for this player.
@@ -129,6 +143,7 @@ class CollectingListener {
 
     RawMatch raw_match;
     UserInfoById users;
+    std::unordered_map<std::int32_t, SteamId> steam_by_userid;
     std::unordered_map<SteamId, std::string> team_of; // steam → A|B
     /// CS team 2(T)/3(CT) → letter; swaps on side switch heuristic.
     std::array<std::string, SIDE_LETTER_SIZE> side_letter{"", "", "B", "A"}; // index by team#

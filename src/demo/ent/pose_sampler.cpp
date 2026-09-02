@@ -10,6 +10,7 @@ namespace {
 
 inline constexpr int TEAM_T = 2;
 inline constexpr int TEAM_CT = 3;
+inline constexpr int MAX_PLAYER_SLOT = 63;
 inline constexpr int CELL_BITS = 9;
 inline constexpr double MAX_COORD_INT = 16384.0;
 inline constexpr std::size_t PITCH_IDX = 0;
@@ -26,9 +27,9 @@ const std::string VEC_Z = "CBodyComponent.m_vecZ";
 
 const std::string STEAM_ID = "m_steamID";
 const std::string PLAYER_NAME = "m_iszPlayerName";
+const std::string USER_ID = "m_iUserID";
 const std::string TEAM_NUM = "m_iTeamNum";
 const std::string PLAYER_PAWN = "m_hPlayerPawn";
-const std::string CONNECTED = "m_iConnected";
 const std::string MVPS = "m_iMVPs";
 const std::string RANK_TYPE = "m_iCompetitiveRankType";
 const std::string RANKING = "m_iCompetitiveRanking";
@@ -165,8 +166,14 @@ void PoseSampler::collectPlayers(const EntityContext& ctx, std::vector<PlayerIde
         if (const auto* team = ent->prop(TEAM_NUM); team != nullptr) {
             ident.team_num = static_cast<int>(team->asU64());
         }
-        if (const auto* connected = ent->prop(CONNECTED); connected != nullptr) {
-            ident.connected = connected->asU64() == 0;
+        if (const auto* user_id = ent->prop(USER_ID); user_id != nullptr) {
+            ident.user_id = normalizeUserid(user_id->asI64());
+            if (ident.user_id == INVALID_USERID) {
+                ident.user_id = 0;
+            }
+        }
+        if (ent->index() >= 1 && ent->index() <= MAX_PLAYER_SLOT + 1) {
+            ident.slot = ent->index() - 1;
         }
         if (const auto* mvps = ent->prop(MVPS); mvps != nullptr) {
             ident.mvp_count = static_cast<int>(mvps->asI64());
@@ -180,7 +187,7 @@ void PoseSampler::collectPlayers(const EntityContext& ctx, std::vector<PlayerIde
         if (const auto* comp_wins = ent->prop(COMP_WINS); comp_wins != nullptr) {
             ident.competitive_wins = static_cast<int>(comp_wins->asI64());
         }
-        if (!ident.connected || (ident.team_num != TEAM_T && ident.team_num != TEAM_CT)) {
+        if (ident.team_num != TEAM_T && ident.team_num != TEAM_CT) {
             continue;
         }
         out.push_back(std::move(ident));

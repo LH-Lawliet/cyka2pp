@@ -30,4 +30,5 @@ void test_forfeit();
 void test_corpus();
 void test_ttd_trace();
 void test_steam_id();
+void test_userid();
 void test_ent_decode();
