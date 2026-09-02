@@ -231,3 +231,8 @@ elseif(CLANG_TIDY_EXE)
     VERBATIM
   )
 endif()
+if(TARGET cyka_tidy)
+  # Clang 20+ writes @*.modmap into the compile DB; those files exist only after
+  # the corresponding TUs are compiled.
+  add_dependencies(cyka_tidy cyka_core cyka2pp cyka2pp-tests)
+endif()
