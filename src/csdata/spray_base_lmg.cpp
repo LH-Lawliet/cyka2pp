@@ -4,21 +4,21 @@
 namespace cyka::csdata::detail {
 namespace {
 
-inline constexpr std::size_t SPRAY_POINTS_SHORT = 20;
-inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
+inline constexpr std::size_t SPRAY_POINTS_M249 = 100;
+inline constexpr std::size_t SPRAY_POINTS_NEGEV = 20;
 
 SpraySpan sprayM249() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_M249>()> RAW{
 #embed "generated/bl_0.bin"
     };
-    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+    return embedSpray<SprayTable::M249, SPRAY_POINTS_M249>(RAW);
 }
 
 SpraySpan sprayNegev() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_NEGEV>()> RAW{
 #embed "generated/bl_1.bin"
     };
-    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+    return embedSpray<SprayTable::NEGEV, SPRAY_POINTS_NEGEV>(RAW);
 }
 
 } // namespace

@@ -181,6 +181,7 @@ add_executable(cyka2pp-tests
     tests/test_steam_id.cpp
     tests/test_userid.cpp
     tests/test_ent_decode.cpp
+    tests/test_spray.cpp
 )
 target_link_libraries(cyka2pp-tests PRIVATE cyka_core)
 target_compile_definitions(cyka2pp-tests PRIVATE

@@ -12,6 +12,7 @@ int main() {
     test_steam_id();
     test_userid();
     test_ent_decode();
+    test_spray();
     std::cout << "passed=" << cyka::test::g_passed << " failed=" << cyka::test::g_failed << '\n';
     return cyka::test::g_failed == 0 ? 0 : 1;
 }

@@ -4,13 +4,13 @@
 namespace cyka::csdata::detail {
 namespace {
 
-inline constexpr std::size_t SPRAY_POINTS_SHORT = 20;
+inline constexpr std::size_t SPRAY_POINTS_NOSIL = 20;
 
 SpraySpan sprayM4a1Nosil() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SHORT>()> RAW{
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_NOSIL>()> RAW{
 #embed "generated/nosil_0.bin"
     };
-    return embedSpray<SPRAY_POINTS_SHORT>(RAW);
+    return embedSpray<SprayTable::M4A1_NOSIL, SPRAY_POINTS_NOSIL>(RAW);
 }
 
 } // namespace

@@ -4,11 +4,36 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 
 namespace cyka::csdata::detail {
 
 inline constexpr std::size_t COORDS_PER_POINT = 2;
+
+/// Distinguishes `embedSpray` instantiations. A template-static keyed only on
+/// `NumPoints` made every 20-bullet weapon share the first decoded table.
+enum class SprayTable : std::uint8_t {
+    AK47 = 1,
+    AUG,
+    FAMAS,
+    GALIL,
+    M4A1,
+    M4A4,
+    SG553,
+    MAC10,
+    MP5SD,
+    MP7,
+    MP9,
+    P90,
+    BIZON,
+    UMP45,
+    M249,
+    NEGEV,
+    M4A1_NOSIL,
+    AUG_SCOPED,
+    SG553_SCOPED,
+};
 
 template <std::size_t NumPoints>
 constexpr std::size_t sprayByteCount() {
@@ -30,7 +55,7 @@ template <std::size_t NumPoints>
     return out;
 }
 
-template <std::size_t NumPoints>
+template <SprayTable Table, std::size_t NumPoints>
 [[nodiscard]] inline SpraySpan embedSpray(
     const std::array<unsigned char, sprayByteCount<NumPoints>()>& raw) {
     static const std::array<SprayPoint, NumPoints> POINTS = decodeSprayPoints<NumPoints>(raw);

@@ -6,7 +6,7 @@
 
 namespace cyka::aim {
 
-void sprayEnrich(Match& match, std::vector<ShotSample> shots);
+void sprayEnrich(Match& match, const Samples& samples);
 void counterStrafeEnrich(const VisibilityBatch& vis, Match& match, const Samples& samples);
 
 } // namespace cyka::aim

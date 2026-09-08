@@ -55,6 +55,13 @@ struct HalfFovQuery {
         .normalize();
 }
 
+[[nodiscard]] inline ViewAngles viewAnglesToward(Vec3 from, Vec3 target) {
+    const Vec3 DELTA = target.sub(from);
+    const double HORIZ = std::hypot(DELTA.pos_x, DELTA.pos_y);
+    return {.pitch = std::atan2(-DELTA.pos_z, HORIZ) * DEG_PER_RAD / MATH_PI,
+            .yaw = std::atan2(DELTA.pos_y, DELTA.pos_x) * DEG_PER_RAD / MATH_PI};
+}
+
 struct ViewAxes {
     Vec3 fwd{};
     Vec3 right{};

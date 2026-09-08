@@ -74,7 +74,7 @@ void enrichFromSamples(const EnrichFromSamples& args) {
         }
     }
 
-    sprayEnrich(*args.match, args.samples->shots);
+    sprayEnrich(*args.match, *args.samples);
 
     if (args.mesh == nullptr || args.samples->frames.empty() || args.ttd_w < 1 || args.ttd_h < 1) {
         return;

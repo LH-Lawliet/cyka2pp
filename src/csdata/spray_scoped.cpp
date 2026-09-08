@@ -4,20 +4,20 @@
 namespace cyka::csdata::detail {
 namespace {
 
-inline constexpr std::size_t SPRAY_POINTS_LONG = 30;
+inline constexpr std::size_t SPRAY_POINTS_SCOPED = 30;
 
 SpraySpan sprayAugScoped() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SCOPED>()> RAW{
 #embed "generated/scoped_0.bin"
     };
-    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+    return embedSpray<SprayTable::AUG_SCOPED, SPRAY_POINTS_SCOPED>(RAW);
 }
 
 SpraySpan spraySg553Scoped() {
-    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_LONG>()> RAW{
+    static constexpr std::array<unsigned char, sprayByteCount<SPRAY_POINTS_SCOPED>()> RAW{
 #embed "generated/scoped_1.bin"
     };
-    return embedSpray<SPRAY_POINTS_LONG>(RAW);
+    return embedSpray<SprayTable::SG553_SCOPED, SPRAY_POINTS_SCOPED>(RAW);
 }
 
 } // namespace
