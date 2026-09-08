@@ -10,13 +10,17 @@ namespace cyka::demo {
 namespace {
 
 inline constexpr std::size_t TEAM_WIPE_SIZE = 5;
+inline constexpr std::size_t WINGMAN_WIPE_SIZE = 2;
 inline constexpr std::size_t NEAR_WIPE_DEAD = 4;
 inline constexpr std::size_t NEAR_WIPE_SURVIVORS = 3;
 inline constexpr int COLOR_A = 1;
 inline constexpr int COLOR_B = 2;
 inline constexpr int COLOR_SUM = 3;
-inline constexpr int HALF_SWAP_ROUND = 12;
 inline constexpr int SMOKE_LIFE_SECS = 20;
+
+[[nodiscard]] constexpr std::size_t teamWipeSize(int rank_type) {
+    return rank_type == RANK_WINGMAN ? WINGMAN_WIPE_SIZE : TEAM_WIPE_SIZE;
+}
 
 [[nodiscard]] std::string elimWinner(
     const RawMatch& raw, const std::unordered_map<SteamId, std::string>& team_of, int round) {
@@ -42,16 +46,19 @@ inline constexpr int SMOKE_LIFE_SECS = 20;
     }
     const auto DEAD_A = dead["A"].size();
     const auto DEAD_B = dead["B"].size();
-    if (DEAD_A >= TEAM_WIPE_SIZE && DEAD_B < DEAD_A) {
+    const auto WIPE = teamWipeSize(observedRankType(raw));
+    if (DEAD_A >= WIPE && DEAD_B < DEAD_A) {
         return "B";
     }
-    if (DEAD_B >= TEAM_WIPE_SIZE && DEAD_A < DEAD_B) {
+    if (DEAD_B >= WIPE && DEAD_A < DEAD_B) {
         return "A";
     }
-    if (DEAD_A > DEAD_B && DEAD_A >= NEAR_WIPE_DEAD && DEAD_B <= NEAR_WIPE_SURVIVORS) {
+    if (WIPE >= TEAM_WIPE_SIZE && DEAD_A > DEAD_B && DEAD_A >= NEAR_WIPE_DEAD &&
+        DEAD_B <= NEAR_WIPE_SURVIVORS) {
         return "B";
     }
-    if (DEAD_B > DEAD_A && DEAD_B >= NEAR_WIPE_DEAD && DEAD_A <= NEAR_WIPE_SURVIVORS) {
+    if (WIPE >= TEAM_WIPE_SIZE && DEAD_B > DEAD_A && DEAD_B >= NEAR_WIPE_DEAD &&
+        DEAD_A <= NEAR_WIPE_SURVIVORS) {
         return "A";
     }
     if (last == nullptr) {
@@ -200,7 +207,8 @@ void CollectingListener::closeRoundInferred(Tick tick) {
     have_pending = false;
     round_live = false;
     bomb_state.clear();
-    if (FINISHED == HALF_SWAP_ROUND) {
+    // Wingman is MR8 (swap after 8); Competitive/Premier are MR12 (swap after 12).
+    if (FINISHED == halfRoundsForRankType(observedRankType(raw()))) {
         std::swap(side_letter[static_cast<std::size_t>(TEAM_T)],
                   side_letter[static_cast<std::size_t>(TEAM_CT)]);
     }

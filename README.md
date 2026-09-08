@@ -323,7 +323,7 @@ python3 scripts/compare_analyzers.py --bin ./build/cyka2pp --maps-dir "$HOME/cs2
 | `forfeit` (×2)               | `endReason=surrender` — Inferno 2–0 + Mirage 0–3                     |
 | `competitive`                | full MM Nuke 11–13 (aim/TTD golden)                                  |
 | `premier`                    | Premier OT Dust2 14–16 (`rankType` 11)                               |
-| `wingman`                    | 4-player Inferno + workshop `de_debris` (`rankType` 7)               |
+| `wingman`                    | 4-player Inferno + workshop `de_debris` + Nuke 8–8 draw (`rankType` 7) |
 | `teamkill`                   | Anubis with many same-team kills                                     |
 | `suicide`                    | tiny roster + self-kills (quit/disconnect edge)                      |
 | `world_damage`               | many kills with empty `killerSteamId` (bomb/world)                   |

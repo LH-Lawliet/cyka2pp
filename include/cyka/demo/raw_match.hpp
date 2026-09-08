@@ -123,4 +123,17 @@ struct RawMatch {
     int score_b{0};
 };
 
+[[nodiscard]] inline int observedRankType(const RawMatch& raw) noexcept {
+    int rank = 0;
+    for (const auto& player : raw.players) {
+        if (player.rank_type == RANK_WINGMAN) {
+            return RANK_WINGMAN;
+        }
+        if (rank == 0 && player.rank_type > 0) {
+            rank = player.rank_type;
+        }
+    }
+    return rank;
+}
+
 } // namespace cyka::demo

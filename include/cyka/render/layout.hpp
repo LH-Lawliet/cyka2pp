@@ -29,10 +29,6 @@ inline constexpr int COL_HIGHLIGHT_R = 6;
 inline constexpr int COL_HIGHLIGHT_TYPE = 12;
 inline constexpr int COL_HIGHLIGHT_K = 4;
 inline constexpr int TRUNC_ELLIPSIS = 3;
-inline constexpr int RANK_PREMIER = 11;
-inline constexpr int RANK_WINGMAN = 7;
-inline constexpr int RANK_COMP = 12;
-inline constexpr int RANK_LEGACY = 6;
 inline constexpr int COL_RTG_PRECISION = 2;
 inline constexpr int MAX_SKILL_GROUP = 18;
 

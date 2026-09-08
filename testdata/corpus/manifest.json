@@ -89,6 +89,21 @@
       ]
     },
     {
+      "id": "wingman-tie-nuke",
+      "file": "3841430878530044097.dem",
+      "kind": "wingman",
+      "rankType": 7,
+      "why": "Wingman on Nuke that ends regulation tied 8-8 (draw). Covers MR8 half-time side swap (after round 8, not 12).",
+      "map": "de_nuke",
+      "scoreA": 8,
+      "scoreB": 8,
+      "rounds": 16,
+      "maxPlayers": 4,
+      "urls": [
+        "https://cdn.hugorustenholz.fr/3841430878530044097.dem"
+      ]
+    },
+    {
       "id": "teamkill-heavy-anubis",
       "file": "3821766067970113638.dem",
       "kind": "teamkill",

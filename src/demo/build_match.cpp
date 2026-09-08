@@ -12,8 +12,6 @@ namespace cyka::demo {
 namespace {
 
 constexpr int TRADE_WINDOW_SECS = 5;
-constexpr int FIRST_HALF_ROUNDS = 12;
-constexpr int REGULATION_ROUNDS = 24;
 
 [[nodiscard]] bool playerActive(const RawMatch& raw, const SteamId& sid) {
     const auto INVOLVED = [&](const auto& steam_a, const auto& steam_b) {
@@ -194,6 +192,18 @@ Match buildMatch(RawMatch raw, std::string file_hash) {
         match.rounds.push_back(std::move(round));
     }
 
+    int rank_type = 0;
+    for (const auto& [_steam_id, player] : match.players) {
+        if (player.rank_type == RANK_WINGMAN) {
+            rank_type = RANK_WINGMAN;
+            break;
+        }
+        if (rank_type == 0 && player.rank_type > 0) {
+            rank_type = player.rank_type;
+        }
+    }
+    const int FIRST_HALF_ROUNDS = halfRoundsForRankType(rank_type);
+    const int REGULATION_ROUNDS = FIRST_HALF_ROUNDS * 2;
     for (const auto& round : match.rounds) {
         if (round == nullptr || round->winner.empty()) {
             continue;
