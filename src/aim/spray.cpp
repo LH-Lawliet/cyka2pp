@@ -21,7 +21,7 @@ constexpr double DEG_FULL_CIRCLE = 360.0;
 constexpr double SPRAY_ACC_PERCENT = 100.0;
 /// Aim punch is stored at half the view-angle compensation (classic CS GOTV ×2).
 constexpr double GOTV_PUNCH_SCALE = 2.0;
-/// Switch locked target when another enemy is this many degrees closer.
+/// Treat as spray transfer when another enemy is this many degrees closer.
 constexpr double TRANSFER_MARGIN_DEG = 2.0;
 
 [[nodiscard]] double angleDelta(double angle_a, double angle_b) {
@@ -48,26 +48,20 @@ constexpr double TRANSFER_MARGIN_DEG = 2.0;
     return {.pos_x = pose.pos.pos_x, .pos_y = pose.pos.pos_y, .pos_z = pose.pos.pos_z + VIEW_Z};
 }
 
-struct TrackedAim {
-    double yaw{0};
-    double pitch{0};
-    SteamId target;
-};
-
-[[nodiscard]] TrackedAim pickTrackedAim(const ShotSample& shot, const Samples& samples) {
-    TrackedAim tracked{.yaw = shot.yaw, .pitch = shot.pitch, .target = {}};
+/// Nearest living enemy by angle to look direction (empty if none).
+[[nodiscard]] SteamId nearestEnemyId(const ShotSample& shot, const Samples& samples) {
     const Frame* frame = frameAtOrBefore(samples, shot.tick);
     if (frame == nullptr) {
-        return tracked;
+        return {};
     }
     const FramePose* self = findPose(*frame, shot.steam_id);
     if (self == nullptr || self->team_letter.empty()) {
-        return tracked;
+        return {};
     }
     const Vec3 EYE = eyeOf(*self);
     const Vec3 LOOK = viewForward({.pitch = shot.pitch, .yaw = shot.yaw});
     double best_deg = std::numeric_limits<double>::infinity();
-    const FramePose* best_pose = nullptr;
+    SteamId best_id;
     for (const auto& pose : frame->poses) {
         if (pose.steam_id == shot.steam_id || !pose.alive || pose.health <= 0) {
             continue;
@@ -82,58 +76,61 @@ struct TrackedAim {
         const double DEG = angleDeg({.lhs = LOOK, .rhs = TO_ENEMY});
         if (DEG < best_deg) {
             best_deg = DEG;
-            best_pose = &pose;
+            best_id = pose.steam_id;
         }
     }
-    if (best_pose == nullptr) {
-        return tracked;
-    }
-    const ViewAngles BEARING = viewAnglesToward(EYE, eyeOf(*best_pose));
-    tracked.yaw = angleDelta(shot.yaw, BEARING.yaw);
-    tracked.pitch = shot.pitch - BEARING.pitch;
-    tracked.target = best_pose->steam_id;
-    return tracked;
+    return best_id;
 }
 
-[[nodiscard]] TrackedAim lockTrackedAim(
-    const ShotSample& shot, const Samples& samples, SteamId* locked) {
-    TrackedAim tracked = pickTrackedAim(shot, samples);
-    if (tracked.target.empty()) {
-        return tracked;
-    }
-    if (locked->empty()) {
-        *locked = tracked.target;
-        return tracked;
-    }
-    if (tracked.target == *locked) {
-        return tracked;
-    }
-    // Sticky lock: only transfer when the new enemy is clearly closer.
+[[nodiscard]] double enemyAngleDeg(
+    const ShotSample& shot, const Samples& samples, const SteamId& target) {
     const Frame* frame = frameAtOrBefore(samples, shot.tick);
-    const FramePose* self = frame == nullptr ? nullptr : findPose(*frame, shot.steam_id);
-    const FramePose* locked_pose = frame == nullptr ? nullptr : findPose(*frame, *locked);
-    if (self == nullptr || locked_pose == nullptr || !locked_pose->alive) {
-        *locked = tracked.target;
-        return tracked;
+    if (frame == nullptr || target.empty()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const FramePose* self = findPose(*frame, shot.steam_id);
+    const FramePose* enemy = findPose(*frame, target);
+    if (self == nullptr || enemy == nullptr || !enemy->alive) {
+        return std::numeric_limits<double>::infinity();
     }
     const Vec3 EYE = eyeOf(*self);
     const Vec3 LOOK = viewForward({.pitch = shot.pitch, .yaw = shot.yaw});
-    const double LOCKED_DEG = angleDeg({.lhs = LOOK, .rhs = eyeOf(*locked_pose).sub(EYE)});
-    const FramePose* new_pose = findPose(*frame, tracked.target);
-    if (new_pose == nullptr) {
-        *locked = tracked.target;
-        return tracked;
+    const Vec3 TO_ENEMY = eyeOf(*enemy).sub(EYE);
+    if (TO_ENEMY.length() < EPS_DIR) {
+        return std::numeric_limits<double>::infinity();
     }
-    const double NEW_DEG = angleDeg({.lhs = LOOK, .rhs = eyeOf(*new_pose).sub(EYE)});
+    return angleDeg({.lhs = LOOK, .rhs = TO_ENEMY});
+}
+
+/// Sticky lock for transfer detection only — never rewrite aim angles.
+/// Returns true when this shot is a flick onto a new enemy.
+[[nodiscard]] bool consumeTransfer(
+    const ShotSample& shot, const Samples& samples, SteamId* locked) {
+    const SteamId NEAREST = nearestEnemyId(shot, samples);
+    if (NEAREST.empty()) {
+        if (!locked->empty() && !std::isfinite(enemyAngleDeg(shot, samples, *locked))) {
+            locked->clear();
+        }
+        return false;
+    }
+    if (locked->empty()) {
+        *locked = NEAREST;
+        return false;
+    }
+    if (NEAREST == *locked) {
+        return false;
+    }
+    const double LOCKED_DEG = enemyAngleDeg(shot, samples, *locked);
+    if (!std::isfinite(LOCKED_DEG)) {
+        *locked = NEAREST;
+        return true;
+    }
+    const double NEW_DEG = enemyAngleDeg(shot, samples, NEAREST);
     if (NEW_DEG + TRANSFER_MARGIN_DEG < LOCKED_DEG) {
-        *locked = tracked.target;
-        return tracked;
+        *locked = NEAREST;
+        return true;
     }
-    const ViewAngles BEARING = viewAnglesToward(EYE, eyeOf(*locked_pose));
-    tracked.yaw = angleDelta(shot.yaw, BEARING.yaw);
-    tracked.pitch = shot.pitch - BEARING.pitch;
-    tracked.target = *locked;
-    return tracked;
+    return false;
 }
 
 /// Rebuild display path from mean steps so unequal spray lengths don't teleport.
@@ -208,16 +205,23 @@ void sprayEnrich(Match& match, const Samples& samples) {
         double prev_dx = 0;
         double prev_dy = 0;
         SteamId locked;
-        const TrackedAim FIRST_AIM = lockTrackedAim(first_shot, samples, &locked);
         for (std::size_t idx = 0; idx < cur.size(); ++idx) {
             const auto& shot = cur[idx];
             if (shot.hit) {
                 ++hits;
             }
-            const TrackedAim AIM = idx == 0 ? FIRST_AIM : lockTrackedAim(shot, samples, &locked);
+            // Raw GOTV view deltas vs burst start (demolens). Do not rewrite into
+            // target-relative space — that mixed coords when lock appeared mid-burst.
+            const double DELTA_X = angleDelta(shot.yaw, first_shot.yaw);
+            const double DELTA_Y = shot.pitch - first_shot.pitch;
+            const bool TRANSFER = consumeTransfer(shot, samples, &locked);
+            if (TRANSFER) {
+                // Absorb the flick into prev so it never enters step averages.
+                prev_dx = DELTA_X;
+                prev_dy = DELTA_Y;
+                continue;
+            }
             const int RECOIL_IDX = shot.recoil_idx >= 0 ? shot.recoil_idx : static_cast<int>(idx);
-            const double DELTA_X = angleDelta(AIM.yaw, FIRST_AIM.yaw);
-            const double DELTA_Y = AIM.pitch - FIRST_AIM.pitch;
             if (RECOIL_IDX < 0 || std::cmp_greater_equal(RECOIL_IDX, PAT_SPAN.size())) {
                 prev_dx = DELTA_X;
                 prev_dy = DELTA_Y;

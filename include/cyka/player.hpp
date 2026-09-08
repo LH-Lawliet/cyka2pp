@@ -23,7 +23,7 @@ struct SprayBullet {
     int i{0};               // json: i
     double ideal_x{0};      // json: ideal_x (GOTV-deg compensation = -2×punch)
     double ideal_y{0};      // json: ideal_y
-    double actual_x{0};     // json: actual_x (target-relative mouse, GOTV deg)
+    double actual_x{0};     // json: actual_x (integrated mean view steps, GOTV deg)
     double actual_y{0};     // json: actual_y
     int n{0};               // json: n (sprays that contributed this index)
     double step_x{0};       // mean Δaim into this shot (not serialized)
