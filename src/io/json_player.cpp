@@ -38,6 +38,11 @@ json aimToJson(const PlayerAim& aim) {
     for (const auto& pattern : aim.spray_patterns) {
         json bullets = json::array();
         for (const auto& bullet : pattern.bullets) {
+            // Skip padded recoil holes (transfer skips) — n==0 used to ship
+            // ideal (0,0) and snap the gold path back to shot 0 on charts.
+            if (bullet.n <= 0) {
+                continue;
+            }
             bullets.push_back({
                 {"i",        bullet.i       },
                 {"ideal_x",  bullet.ideal_x },

@@ -133,13 +133,40 @@ constexpr double TRANSFER_MARGIN_DEG = 2.0;
     return false;
 }
 
+[[nodiscard]] csdata::SprayPoint idealFromPunch(const csdata::SprayPoint& punch) {
+    return {.delta_x = -punch.delta_x * GOTV_PUNCH_SCALE,
+            .delta_y = -punch.delta_y * GOTV_PUNCH_SCALE};
+}
+
+/// Grow the dense recoil-index vector and always stamp table ideals so padded
+/// holes (transfer skips, etc.) never keep ideal (0,0) like shot 0.
+void ensureBulletSlot(
+    SprayPattern& pattern, int recoil_idx, std::span<const csdata::SprayPoint> table) {
+    while (std::cmp_less_equal(pattern.bullets.size(), recoil_idx)) {
+        const int SLOT = static_cast<int>(pattern.bullets.size());
+        const csdata::SprayPoint IDEAL = idealFromPunch(table[static_cast<std::size_t>(SLOT)]);
+        pattern.bullets.push_back(SprayBullet{
+            .i = SLOT,
+            .ideal_x = IDEAL.delta_x,
+            .ideal_y = IDEAL.delta_y,
+        });
+    }
+    const csdata::SprayPoint IDEAL = idealFromPunch(table[static_cast<std::size_t>(recoil_idx)]);
+    auto& bullet = pattern.bullets[static_cast<std::size_t>(recoil_idx)];
+    bullet.i = recoil_idx;
+    bullet.ideal_x = IDEAL.delta_x;
+    bullet.ideal_y = IDEAL.delta_y;
+}
+
 /// Rebuild display path from mean steps so unequal spray lengths don't teleport.
 void rebuildPathFromSteps(SprayPattern& pattern) {
     double acc_x = 0;
     double acc_y = 0;
     for (auto& bullet : pattern.bullets) {
-        acc_x += bullet.step_x;
-        acc_y += bullet.step_y;
+        if (bullet.n > 0) {
+            acc_x += bullet.step_x;
+            acc_y += bullet.step_y;
+        }
         bullet.actual_x = acc_x;
         bullet.actual_y = acc_y;
     }
@@ -227,20 +254,12 @@ void sprayEnrich(Match& match, const Samples& samples) {
                 prev_dy = DELTA_Y;
                 continue;
             }
-            const auto& pat_pt = PAT_SPAN[static_cast<std::size_t>(RECOIL_IDX)];
-            // Ideal = -2×punch: mouse compensation in GOTV view degrees.
-            const double IDEAL_X = -pat_pt.delta_x * GOTV_PUNCH_SCALE;
-            const double IDEAL_Y = -pat_pt.delta_y * GOTV_PUNCH_SCALE;
+            ensureBulletSlot(*pattern_ptr, RECOIL_IDX, PAT_SPAN);
+            auto& bullet = pattern_ptr->bullets[static_cast<std::size_t>(RECOIL_IDX)];
+            const double IDEAL_X = bullet.ideal_x;
+            const double IDEAL_Y = bullet.ideal_y;
             dev_sum += std::hypot(DELTA_X - IDEAL_X, DELTA_Y - IDEAL_Y);
             ++num_dev;
-            while (std::cmp_less_equal(pattern_ptr->bullets.size(), RECOIL_IDX)) {
-                pattern_ptr->bullets.push_back(
-                    SprayBullet{.i = static_cast<int>(pattern_ptr->bullets.size())});
-            }
-            auto& bullet = pattern_ptr->bullets[static_cast<std::size_t>(RECOIL_IDX)];
-            bullet.i = RECOIL_IDX;
-            bullet.ideal_x = IDEAL_X;
-            bullet.ideal_y = IDEAL_Y;
             const double STEP_X = DELTA_X - prev_dx;
             const double STEP_Y = DELTA_Y - prev_dy;
             bullet.step_x = ((bullet.step_x * bullet.n) + STEP_X) / (bullet.n + 1);
