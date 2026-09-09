@@ -17,6 +17,10 @@ inline constexpr int COLOR_A = 1;
 inline constexpr int COLOR_B = 2;
 inline constexpr int COLOR_SUM = 3;
 inline constexpr int SMOKE_LIFE_SECS = 20;
+// Regulation is two halves; OT starts after both (scored == 2 * half).
+inline constexpr int REGULATION_HALVES = 2;
+// CS2 overtime half length (swap every N scored rounds in OT).
+inline constexpr int OT_HALF_ROUNDS = 3;
 
 [[nodiscard]] constexpr std::size_t teamWipeSize(int rank_type) {
     return rank_type == RANK_WINGMAN ? WINGMAN_WIPE_SIZE : TEAM_WIPE_SIZE;
@@ -221,10 +225,10 @@ void CollectingListener::closeRoundInferred(Tick tick) {
     }
     // Regulation half, then OT: swap at 2*half (OT start) and every OT half after.
     const int HALF = halfRoundsForRankType(observedRankType(raw()));
-    constexpr int OT_HALF = 3;
+    const int REGULATION = HALF * REGULATION_HALVES;
     bool do_swap = scored == HALF;
-    if (!do_swap && scored >= HALF * 2) {
-        do_swap = (scored - HALF * 2) % OT_HALF == 0;
+    if (!do_swap && scored >= REGULATION) {
+        do_swap = (scored - REGULATION) % OT_HALF_ROUNDS == 0;
     }
     if (do_swap) {
         std::swap(side_letter[static_cast<std::size_t>(TEAM_T)],
