@@ -21,13 +21,18 @@ class CollectingListener {
   public:
     void onUserinfo(const UserInfoById& users);
     void onEvent(Tick tick, const GameEvent& event);
-    /// CCSGameRulesProxy snapshot (CS2 often omits round_end on surrender).
+    /// CCSGameRulesProxy snapshot. CS2 often omits the round_end game event;
+    /// m_nRoundEndCount / m_iRoundWinStatus / m_iRoundEndWinnerTeam are authoritative.
     struct GameRulesSnapshot {
         Tick tick{};
         int win_reason{0};
         int win_status{0};
         int rounds_played{0};
         int game_phase{0};
+        int round_end_count{0};
+        int round_end_winner{0};
+        int round_end_reason{0};
+        bool switching_teams{false};
     };
     void onGameRules(const GameRulesSnapshot& snap);
     void finish();
@@ -152,6 +157,12 @@ class CollectingListener {
     bool match_started{false};
     bool match_over{false};
     bool surrender_recorded{false};
+    /// Last applied GameRules round-end pulse (avoid re-applying the same result).
+    int last_round_end_count{-1};
+    int last_win_status{0};
+    bool last_switching_teams{false};
+    /// True once m_bSwitchingTeamsAtRoundReset has driven a side swap.
+    bool sides_swapped_by_rules{false};
     Tick freeze_start{0};
     RawRound pending{};
     bool have_pending{false};

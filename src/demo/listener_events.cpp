@@ -55,26 +55,78 @@ void CollectingListener::onGameRules(const GameRulesSnapshot& snap) {
     if (snap.game_phase >= GAMEPHASE_MATCH_ENDED) {
         match_over = true;
     }
-    if (snap.win_reason != REASON_T_SURRENDER && snap.win_reason != REASON_CT_SURRENDER) {
+
+    // Server-driven half-time / overtime side swap (prefer over counting rounds).
+    if (snap.switching_teams && !last_switching_teams) {
+        std::swap(side_letter[static_cast<std::size_t>(TEAM_T)],
+                  side_letter[static_cast<std::size_t>(TEAM_CT)]);
+        sides_swapped_by_rules = true;
+    }
+    last_switching_teams = snap.switching_teams;
+
+    int winner = 0;
+    int reason = 0;
+    bool fresh = false;
+
+    // m_nRoundEndCount is the clean "round just ended" pulse when present.
+    if (snap.round_end_count > 0 && snap.round_end_count != last_round_end_count) {
+        winner = snap.round_end_winner >= TEAM_T && snap.round_end_winner <= TEAM_CT
+                   ? snap.round_end_winner
+                   : snap.win_status;
+        reason = snap.round_end_reason > 0 ? snap.round_end_reason : snap.win_reason;
+        fresh = true;
+        last_round_end_count = snap.round_end_count;
+    } else if (snap.win_status >= TEAM_T && snap.win_status <= TEAM_CT &&
+               last_win_status != snap.win_status && last_win_status == 0) {
+        // 0 → 2/3: round result published (CS2 often skips the round_end event).
+        winner = snap.win_status;
+        reason = snap.win_reason;
+        fresh = true;
+    }
+    last_win_status = snap.win_status;
+
+    if (!fresh) {
         return;
     }
-    if (surrender_recorded) {
-        return;
-    }
-    surrender_recorded = true;
-    match_over = true;
-    if (have_pending && !pending.winner_letter.empty()) {
-        closeRoundInferred(snap.tick);
-    }
-    if (!have_pending) {
-        beginRound(snap.tick);
-    }
-    int winner = snap.win_status;
     if (winner < TEAM_T || winner > TEAM_CT) {
-        winner = winnerFromReason(snap.win_reason);
+        winner = winnerFromReason(reason);
     }
-    endRound({.tick = snap.tick, .winner_team = winner, .reason = reasonName(snap.win_reason)});
-    closeRoundInferred(snap.tick);
+    if (winner < TEAM_T || winner > TEAM_CT) {
+        return;
+    }
+
+    const bool IS_SURRENDER = reason == REASON_T_SURRENDER || reason == REASON_CT_SURRENDER;
+    const std::string REASON = reasonName(reason);
+
+    if (IS_SURRENDER) {
+        // Close any in-progress round first, then record a distinct surrender round.
+        // Stamping surrender onto the live round would collapse 2-0 forfeits to 1-0.
+        if (surrender_recorded) {
+            return;
+        }
+        surrender_recorded = true;
+        match_over = true;
+        if (have_pending && !pending.winner_letter.empty() && pending.reason != "surrender") {
+            closeRoundInferred(snap.tick);
+        }
+        if (!have_pending) {
+            beginRound(snap.tick);
+        }
+        endRound({.tick = snap.tick, .winner_team = winner, .reason = REASON});
+        closeRoundInferred(snap.tick);
+        return;
+    }
+
+    // Stamp T/CT onto the live round; round_officially_ended owns lifecycle.
+    if (have_pending) {
+        endRound({.tick = snap.tick, .winner_team = winner, .reason = REASON});
+    } else if (!raw().rounds.empty()) {
+        auto& last = raw().rounds.back();
+        last.winner_letter = side_letter[static_cast<std::size_t>(winner)];
+        if (!REASON.empty()) {
+            last.reason = REASON;
+        }
+    }
 }
 
 void CollectingListener::onEvent(Tick tick, const GameEvent& event) {
@@ -248,7 +300,6 @@ void CollectingListener::onEvent(Tick tick, const GameEvent& event) {
         if (best != nullptr) {
             best->end_tick = tick;
         }
-        return;
     }
 }
 

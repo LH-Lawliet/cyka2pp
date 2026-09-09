@@ -155,11 +155,12 @@ void CollectingListener::endRound(RoundEnd end) {
     }
     round_live = false;
     pending.end_tick = end.tick;
-    if (pending.reason.empty() && !end.reason.empty()) {
-        pending.reason = std::move(end.reason);
-    }
-    if (pending.winner_letter.empty() && end.winner_team >= TEAM_T && end.winner_team <= TEAM_CT) {
+    // Authoritative sources (round_end event / GameRules) always win over inference.
+    if (end.winner_team >= TEAM_T && end.winner_team <= TEAM_CT) {
         pending.winner_letter = side_letter[static_cast<std::size_t>(end.winner_team)];
+    }
+    if (!end.reason.empty()) {
+        pending.reason = std::move(end.reason);
     }
 }
 
@@ -202,13 +203,30 @@ void CollectingListener::closeRoundInferred(Tick tick) {
         --round_number;
         return;
     }
-    const int FINISHED = pending.number;
     raw().rounds.push_back(pending);
     have_pending = false;
     round_live = false;
     bomb_state.clear();
-    // Wingman is MR8 (swap after 8); Competitive/Premier are MR12 (swap after 12).
-    if (FINISHED == halfRoundsForRankType(observedRankType(raw()))) {
+    // Prefer m_bSwitchingTeamsAtRoundReset. Fallback: swap after N *scored*
+    // rounds (not round_number — empty phantoms like world-only deaths would
+    // fire half-time one round early and invert post-half winners).
+    if (sides_swapped_by_rules) {
+        return;
+    }
+    int scored = 0;
+    for (const auto& round : raw().rounds) {
+        if (!round.winner_letter.empty()) {
+            ++scored;
+        }
+    }
+    // Regulation half, then OT: swap at 2*half (OT start) and every OT half after.
+    const int HALF = halfRoundsForRankType(observedRankType(raw()));
+    constexpr int OT_HALF = 3;
+    bool do_swap = scored == HALF;
+    if (!do_swap && scored >= HALF * 2) {
+        do_swap = (scored - HALF * 2) % OT_HALF == 0;
+    }
+    if (do_swap) {
         std::swap(side_letter[static_cast<std::size_t>(TEAM_T)],
                   side_letter[static_cast<std::size_t>(TEAM_CT)]);
     }

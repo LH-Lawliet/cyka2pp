@@ -143,12 +143,20 @@ void EntityBridge::publishGameRules(Tick tick) {
         const auto* const STATUS = ent->prop("m_pGameRules.m_iRoundWinStatus");
         const auto* const PLAYED = ent->prop("m_pGameRules.m_totalRoundsPlayed");
         const auto* const PHASE = ent->prop("m_pGameRules.m_gamePhase");
+        const auto* const END_COUNT = ent->prop("m_pGameRules.m_nRoundEndCount");
+        const auto* const END_WINNER = ent->prop("m_pGameRules.m_iRoundEndWinnerTeam");
+        const auto* const END_REASON = ent->prop("m_pGameRules.m_eRoundEndReason");
+        const auto* const SWITCHING = ent->prop("m_pGameRules.m_bSwitchingTeamsAtRoundReset");
         listener->onGameRules({
             .tick = tick,
             .win_reason = REASON != nullptr ? static_cast<int>(REASON->asI64()) : 0,
             .win_status = STATUS != nullptr ? static_cast<int>(STATUS->asI64()) : 0,
             .rounds_played = PLAYED != nullptr ? static_cast<int>(PLAYED->asI64()) : 0,
             .game_phase = PHASE != nullptr ? static_cast<int>(PHASE->asI64()) : 0,
+            .round_end_count = END_COUNT != nullptr ? static_cast<int>(END_COUNT->asI64()) : 0,
+            .round_end_winner = END_WINNER != nullptr ? static_cast<int>(END_WINNER->asI64()) : 0,
+            .round_end_reason = END_REASON != nullptr ? static_cast<int>(END_REASON->asI64()) : 0,
+            .switching_teams = SWITCHING != nullptr && SWITCHING->asBool(),
         });
         return;
     }

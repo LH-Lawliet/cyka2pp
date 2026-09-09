@@ -324,10 +324,11 @@ python3 scripts/compare_analyzers.py --bin ./build/cyka2pp --maps-dir "$HOME/cs2
 | `competitive`                | full MM Nuke 11–13 (aim/TTD golden)                                  |
 | `premier`                    | Premier OT Dust2 14–16 (`rankType` 11)                               |
 | `wingman`                    | 4-player Inferno + workshop `de_debris` + Nuke 8–8 draw (`rankType` 7) |
-| `teamkill`                   | Anubis with many same-team kills                                     |
-| `suicide`                    | tiny roster + self-kills (quit/disconnect edge)                      |
+| `teamkill`                   | Anubis 13–3 with one verified friendly-fire kill                     |
+| `tiny-roster`                | Inferno 9–5, 3–4 players (no self-kills in demo)                     |
 | `world_damage`               | many kills with empty `killerSteamId` (bomb/world)                   |
 | `hostage`                    | `cs_office` non-defuse map                                           |
+| `premier` DNF                | Inferno 9–7 surrender mid-match (`3841625442696036619`)              |
 | `pro` (optional)             | HLTV Vitality vs Spirit Nuke — skipped if the external URL is down   |
 
 Valve CDN: `https://cdn.hugorustenholz.fr/<match_id>.dem`. Prem=11, Comp=12, Wingman=7.

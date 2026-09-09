@@ -107,12 +107,12 @@
       "id": "teamkill-heavy-anubis",
       "file": "3821766067970113638.dem",
       "kind": "teamkill",
-      "why": "Many same-team kills in analyzed JSON (friendly fire / TK path).",
+      "why": "Anubis 13-3 with one verified friendly-fire kill (Qms -> Panard2Canard). Cross-checked with demoparser2 and demoinfocs; not a high TK count.",
       "map": "de_anubis",
       "scoreA": 13,
       "scoreB": 3,
       "rounds": 16,
-      "minSameTeamKills": 5,
+      "minSameTeamKills": 1,
       "urls": [
         "https://cdn.cykaslayer.com/3821766067970113638.dem"
       ]
@@ -120,14 +120,13 @@
     {
       "id": "suicide-roster-inferno",
       "file": "3827142806531473757.dem",
-      "kind": "suicide",
-      "why": "Multiple self-kills and a tiny roster (3 players) — disconnect/suicide edge case.",
+      "kind": "tiny-roster",
+      "why": "Tiny roster (3\u20134 players, rank type 7 / wingman half). GameRules score 9-5. No self-kills in the demo (stale minSelfKills claim removed; confirmed with demoparser2 and demoinfocs).",
       "map": "de_inferno",
-      "scoreA": 8,
-      "scoreB": 6,
+      "scoreA": 9,
+      "scoreB": 5,
       "rounds": 14,
       "maxPlayers": 5,
-      "minSelfKills": 2,
       "urls": [
         "https://cdn.cykaslayer.com/3827142806531473757.dem"
       ]
@@ -191,6 +190,21 @@
       "source": "https://www.hltv.org/matches/2378917/vitality-vs-spirit-iem-katowice-2025",
       "urls": [
         "https://figshare.com/ndownloader/files/52429013"
+      ]
+    },
+    {
+      "id": "premier-dnf-inferno-9-7",
+      "file": "3841625442696036619.dem",
+      "kind": "premier",
+      "rankType": 11,
+      "why": "Premier DNF/surrender mid-match. GameRules m_iRoundWinStatus / m_iMatchStats_RoundResults + scored-round half-time swap \u2192 9-7 for Team A (Un Monde Parfait); elim inference alone drew 8-8.",
+      "map": "de_inferno",
+      "scoreA": 9,
+      "scoreB": 7,
+      "rounds": 16,
+      "expectEndReason": "surrender",
+      "urls": [
+        "https://cdn.hugorustenholz.fr/3841625442696036619.dem"
       ]
     }
   ]
