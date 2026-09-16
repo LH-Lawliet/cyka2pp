@@ -1,5 +1,6 @@
 #include "cyka/demo/ent_bridge.hpp"
 
+#include "cyka/demo/econ_item.hpp"
 #include "cyka/demo/ent/baselines.hpp"
 #include "cyka/demo/ent/entity.hpp"
 #include "cyka/demo/proto_wire.hpp"
@@ -71,6 +72,17 @@ void EntityBridge::onNetMsg(const NetMessage& net_msg) {
         // Publish before later game events in this packet resolve userids.
         publishPlayers();
         break;
+    case MSG_CS_UM_END_OF_MATCH_ALL_PLAYERS_DATA:
+        handleCsUserMessage(MSG_CS_UM_END_OF_MATCH_ALL_PLAYERS_DATA, net_msg.payload);
+        break;
+    case MSG_CS_UM_SEND_PLAYER_LOADOUT:
+        handleCsUserMessage(MSG_CS_UM_SEND_PLAYER_LOADOUT, net_msg.payload);
+        break;
+    case MSG_USER_MESSAGE:
+        if (auto inner = unwrapUserMessage(net_msg.payload)) {
+            handleCsUserMessage(inner->msg_type, inner->msg_data);
+        }
+        break;
     default:
         break;
     }
@@ -89,6 +101,7 @@ void EntityBridge::publishPlayers() {
             .rank_type = ident.rank_type,
             .ranking = ident.ranking,
             .competitive_wins = ident.competitive_wins,
+            .crosshair_code = ident.crosshair_code,
         });
     }
 }
@@ -194,6 +207,25 @@ void EntityBridge::afterPacket(Tick tick) {
         out.airborne = pose.airborne;
         out.duck_amount = pose.duck_amount;
         listener->addPose(std::move(out));
+    }
+}
+
+void EntityBridge::handleCsUserMessage(std::uint32_t msg_type,
+                                       std::span<const std::uint8_t> payload) {
+    if (listener == nullptr || payload.empty()) {
+        return;
+    }
+    if (msg_type == MSG_CS_UM_END_OF_MATCH_ALL_PLAYERS_DATA) {
+        std::vector<EndOfMatchPlayer> players;
+        parseEndOfMatchAllPlayersData(payload, players);
+        for (auto& player : players) {
+            listener->applyLoadoutItems(player.steam_id, std::move(player.items));
+        }
+        return;
+    }
+    if (msg_type == MSG_CS_UM_SEND_PLAYER_LOADOUT) {
+        auto loadout = parseSendPlayerLoadout(payload);
+        listener->applyLoadoutBySlot(loadout.player_slot, std::move(loadout.items));
     }
 }
 

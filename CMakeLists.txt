@@ -108,6 +108,7 @@ set(CYKA_LIB_SOURCES
     src/demo/ent/baselines.cpp
     src/demo/ent/pose_sampler.cpp
     src/demo/ent_bridge.cpp
+    src/demo/econ_item.cpp
     src/demo/debug.cpp
     src/demo/parser.cpp
     src/demo/build_match.cpp
@@ -132,6 +133,7 @@ set(CYKA_LIB_SOURCES
     src/aim/shot_visible.cpp
     src/aim/crosshair.cpp
     src/csdata/weapons.cpp
+    src/csdata/items.cpp
     src/csdata/spray_tables.cpp
     src/csdata/spray_base_rifles.cpp
     src/csdata/spray_base_smg.cpp
@@ -182,6 +184,7 @@ add_executable(cyka2pp-tests
     tests/test_userid.cpp
     tests/test_ent_decode.cpp
     tests/test_spray.cpp
+    tests/test_loadout.cpp
 )
 target_link_libraries(cyka2pp-tests PRIVATE cyka_core)
 target_compile_definitions(cyka2pp-tests PRIVATE

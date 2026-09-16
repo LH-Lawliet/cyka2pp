@@ -34,6 +34,7 @@ const std::string MVPS = "m_iMVPs";
 const std::string RANK_TYPE = "m_iCompetitiveRankType";
 const std::string RANKING = "m_iCompetitiveRanking";
 const std::string COMP_WINS = "m_iCompetitiveWins";
+const std::string CROSSHAIR_CODES = "m_szCrosshairCodes";
 
 const std::string EYE_ANGLES = "m_angEyeAngles";
 const std::string HEALTH = "m_iHealth";
@@ -186,6 +187,10 @@ void PoseSampler::collectPlayers(const EntityContext& ctx, std::vector<PlayerIde
         }
         if (const auto* comp_wins = ent->prop(COMP_WINS); comp_wins != nullptr) {
             ident.competitive_wins = static_cast<int>(comp_wins->asI64());
+        }
+        if (const auto* xhair = ent->prop(CROSSHAIR_CODES);
+            xhair != nullptr && xhair->kind == ValKind::STR && !xhair->s.empty()) {
+            ident.crosshair_code = xhair->s;
         }
         if (ident.team_num != TEAM_T && ident.team_num != TEAM_CT) {
             continue;

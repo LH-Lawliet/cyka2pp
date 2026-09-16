@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cyka/loadout.hpp"
 #include "cyka/types.hpp"
 
 #include <string>
@@ -50,6 +51,10 @@ struct RawPlayer {
     int bomb_defused_count{0};
     int enemies_flashed{0};
     int utility_damage{0};
+    /// Crosshair share code from CCSPlayerController::m_szCrosshairCodes.
+    std::string crosshair_code;
+    /// Cosmetics from EndOfMatch / SendPlayerLoadout usermessages.
+    std::vector<LoadoutItem> loadout;
 };
 
 struct RawShot {

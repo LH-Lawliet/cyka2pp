@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cyka/loadout.hpp"
 #include "cyka/types.hpp"
 
 #include <map>
@@ -113,6 +114,11 @@ class Player {
     int health_damage{0};      // json: healthDamage
 
     std::optional<PlayerAim> aim; // json: aim
+
+    /// Crosshair share code (`loadout.crosshairCode`).
+    std::string crosshair_code;
+    /// Match cosmetics (`loadout.items`).
+    std::vector<LoadoutItem> loadout_items;
 };
 
 } // namespace cyka

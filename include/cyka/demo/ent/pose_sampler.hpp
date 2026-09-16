@@ -25,6 +25,8 @@ struct PlayerIdent {
     /// Skill group 0–18 (Wingman/Comp) or CS Rating (Premier).
     int ranking{0};
     int competitive_wins{0};
+    /// CCSPlayerController::m_szCrosshairCodes share code (may be empty).
+    std::string crosshair_code;
 };
 
 /// One alive-player snapshot at a sampled tick.

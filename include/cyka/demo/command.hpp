@@ -41,8 +41,12 @@ inline constexpr std::uint32_t MSG_CLASS_INFO = 42;
 inline constexpr std::uint32_t MSG_CREATE_STRING_TABLE = 44;
 inline constexpr std::uint32_t MSG_UPDATE_STRING_TABLE = 45;
 inline constexpr std::uint32_t MSG_PACKET_ENTITIES = 55;
+inline constexpr std::uint32_t MSG_USER_MESSAGE = 72;
 inline constexpr std::uint32_t MSG_GAME_EVENT_LIST = 205;
 inline constexpr std::uint32_t MSG_GAME_EVENT = 207;
+/// CS usermessage ids (also appear as top-level net message types in demos).
+inline constexpr std::uint32_t MSG_CS_UM_END_OF_MATCH_ALL_PLAYERS_DATA = 375;
+inline constexpr std::uint32_t MSG_CS_UM_SEND_PLAYER_LOADOUT = 388;
 
 inline constexpr std::array<char, 8> CS2_MAGIC = {'P', 'B', 'D', 'E', 'M', 'S', '2', '\0'};
 inline constexpr std::size_t CS2_MAGIC_PREFIX_LEN = 7;

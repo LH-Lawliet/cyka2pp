@@ -1,6 +1,8 @@
 #include "cyka/io/json_detail.hpp"
+#include "cyka/loadout.hpp"
 
 #include <optional>
+#include <string>
 
 namespace cyka::io::detail {
 namespace {
@@ -65,6 +67,84 @@ json aimToJson(const PlayerAim& aim) {
     return json_out;
 }
 
+json stickerToJson(const LoadoutSticker& sticker) {
+    json json_out{
+        {"slot", sticker.slot      },
+        {"id",   sticker.sticker_id}
+    };
+    if (sticker.wear != 0.F) {
+        json_out["wear"] = sticker.wear;
+    }
+    if (sticker.scale != 0.F) {
+        json_out["scale"] = sticker.scale;
+    }
+    if (sticker.rotation != 0.F) {
+        json_out["rotation"] = sticker.rotation;
+    }
+    if (sticker.offset_x != 0.F) {
+        json_out["offsetX"] = sticker.offset_x;
+    }
+    if (sticker.offset_y != 0.F) {
+        json_out["offsetY"] = sticker.offset_y;
+    }
+    if (sticker.offset_z != 0.F) {
+        json_out["offsetZ"] = sticker.offset_z;
+    }
+    if (sticker.pattern != 0) {
+        json_out["pattern"] = sticker.pattern;
+    }
+    return json_out;
+}
+
+json loadoutItemToJson(const LoadoutItem& item) {
+    json json_out{
+        {"defIndex",   item.def_index  },
+        {"paintIndex", item.paint_index},
+        {"paintSeed",  item.paint_seed },
+        {"rarity",     item.rarity     },
+        {"quality",    item.quality    }
+    };
+    if (item.item_id != 0) {
+        json_out["itemId"] = std::to_string(item.item_id);
+    }
+    if (!item.item_name.empty()) {
+        json_out["name"] = item.item_name;
+    }
+    if (item.has_wear) {
+        json_out["wear"] = item.paint_wear;
+    }
+    if (!item.custom_name.empty()) {
+        json_out["customName"] = item.custom_name;
+    }
+    if (item.kill_eater_value >= 0) {
+        json_out["statTrak"] = item.kill_eater_value;
+    }
+    if (item.music_index != 0) {
+        json_out["musicIndex"] = item.music_index;
+    }
+    if (item.team != 0) {
+        json_out["team"] = item.team;
+    }
+    if (item.slot >= 0) {
+        json_out["slot"] = item.slot;
+    }
+    if (!item.stickers.empty()) {
+        json stickers = json::array();
+        for (const auto& sticker : item.stickers) {
+            stickers.push_back(stickerToJson(sticker));
+        }
+        json_out["stickers"] = std::move(stickers);
+    }
+    if (!item.keychains.empty()) {
+        json keychains = json::array();
+        for (const auto& keychain : item.keychains) {
+            keychains.push_back(stickerToJson(keychain));
+        }
+        json_out["keychains"] = std::move(keychains);
+    }
+    return json_out;
+}
+
 } // namespace
 
 json playerToJson(const Player& player) {
@@ -121,6 +201,20 @@ json playerToJson(const Player& player) {
     }
     if (player.aim) {
         json_out["aim"] = aimToJson(*player.aim);
+    }
+    if (!player.crosshair_code.empty() || !player.loadout_items.empty()) {
+        json loadout = json::object();
+        if (!player.crosshair_code.empty()) {
+            loadout["crosshairCode"] = player.crosshair_code;
+        }
+        if (!player.loadout_items.empty()) {
+            json items = json::array();
+            for (const auto& item : player.loadout_items) {
+                items.push_back(loadoutItemToJson(item));
+            }
+            loadout["items"] = std::move(items);
+        }
+        json_out["loadout"] = std::move(loadout);
     }
     return json_out;
 }

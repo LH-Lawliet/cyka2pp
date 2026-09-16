@@ -3,6 +3,7 @@
 #include "cyka/demo/game_event.hpp"
 #include "cyka/demo/raw_match.hpp"
 #include "cyka/demo/string_tables.hpp"
+#include "cyka/loadout.hpp"
 #include "cyka/types.hpp"
 
 #include <array>
@@ -68,6 +69,7 @@ class CollectingListener {
         int rank_type{-1};
         int ranking{-1};
         int competitive_wins{-1};
+        std::string crosshair_code;
     };
     void observeEntityPlayer(const EntityPlayer& player) {
         if (player.slot >= 0) {
@@ -90,8 +92,16 @@ class CollectingListener {
                       .ranking = player.ranking,
                       .competitive_wins = player.competitive_wins});
         }
+        if (!player.crosshair_code.empty()) {
+            noteCrosshair(player.steam, player.crosshair_code);
+        }
     }
     void addPose(RawPose pose) { raw().poses.push_back(std::move(pose)); }
+
+    /// Merge EndOfMatch / SendPlayerLoadout cosmetics onto a player.
+    void applyLoadoutItems(const SteamId& steam, std::vector<LoadoutItem> items);
+    /// Resolve SendPlayerLoadout by controller slot (0–63).
+    void applyLoadoutBySlot(int player_slot, std::vector<LoadoutItem> items);
 
     /// Optional: capture eye angles/pos at weapon_fire from live entities.
     using AimCapture = bool (*)(void* ctx, const SteamId& steam, RawShot& shot);
@@ -126,6 +136,7 @@ class CollectingListener {
         int competitive_wins{0};
     };
     void noteRank(const PlayerRank& rank);
+    void noteCrosshair(const SteamId& steam, const std::string& code);
 
     struct RoundEnd {
         Tick tick{};

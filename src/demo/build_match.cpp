@@ -74,6 +74,8 @@ Match buildMatch(RawMatch raw, std::string file_hash) {
         player.bomb_defused_count = raw_player.bomb_defused_count;
         player.enemies_flashed = raw_player.enemies_flashed;
         player.utility_damage = raw_player.utility_damage;
+        player.crosshair_code = raw_player.crosshair_code;
+        player.loadout_items = raw_player.loadout;
         match.players.emplace(raw_player.steam_id, std::move(player));
     }
 

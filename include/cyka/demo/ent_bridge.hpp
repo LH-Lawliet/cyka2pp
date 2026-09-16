@@ -40,6 +40,7 @@ class EntityBridge {
   private:
     void publishPlayers();
     void publishGameRules(Tick tick);
+    void handleCsUserMessage(std::uint32_t msg_type, std::span<const std::uint8_t> payload);
 
     CollectingListener* listener;
     ent::EntityContext ctx;

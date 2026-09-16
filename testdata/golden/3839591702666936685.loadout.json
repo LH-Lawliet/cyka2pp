@@ -1,0 +1,405 @@
+{
+  "demo": "3839591702666936685.dem",
+  "mapName": "de_inferno",
+  "players": {
+    "76561198081439018": {
+      "name": "devwolx",
+      "crosshairCode": "CSGO-RmiY8-LYeoo-ckpZR-Ujr2Z-pmmwG",
+      "items": [
+        {
+          "defIndex": 35,
+          "paintIndex": 1331,
+          "paintSeed": 62,
+          "rarity": 1,
+          "quality": 4,
+          "itemId": "53411614169",
+          "name": "Nova",
+          "wear": 0.05914062
+        },
+        {
+          "defIndex": 59,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 5028,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561198107968626": {
+      "name": "BoundCaster",
+      "crosshairCode": "CSGO-QtJLn-q4Mp8-rVwEh-anawK-e5urD",
+      "items": [
+        {
+          "defIndex": 40,
+          "paintIndex": 304,
+          "paintSeed": 615,
+          "rarity": 3,
+          "quality": 4,
+          "itemId": "856862327",
+          "name": "SSG 08",
+          "wear": 0.41552687
+        },
+        {
+          "defIndex": 59,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 5028,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        },
+        {
+          "defIndex": 5501,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 4,
+          "quality": 4,
+          "itemId": "52980016954",
+          "stickers": [
+            {
+              "slot": 2,
+              "id": 4588,
+              "scale": 1.101589
+            }
+          ]
+        }
+      ]
+    },
+    "76561198130549714": {
+      "name": "Un Monde Parfait",
+      "crosshairCode": "CSGO-7ahvn-en4Za-bbynP-HHyB6-8PxoO",
+      "items": [
+        {
+          "defIndex": 60,
+          "paintIndex": 106,
+          "paintSeed": 573,
+          "rarity": 6,
+          "quality": 9,
+          "itemId": "50838960361",
+          "name": "M4A1-S",
+          "wear": 0.12288304,
+          "customName": "IRAN PROBLEM SOLVER",
+          "statTrak": 1502,
+          "keychains": [
+            {
+              "slot": 0,
+              "id": 8,
+              "offsetX": 0.93665,
+              "offsetY": 0.331838,
+              "offsetZ": 7.468803,
+              "pattern": 22244
+            }
+          ]
+        },
+        {
+          "defIndex": 509,
+          "paintIndex": 43,
+          "paintSeed": 922,
+          "rarity": 6,
+          "quality": 3,
+          "itemId": "53327694000",
+          "name": "Huntsman Knife",
+          "wear": 0.10693403
+        },
+        {
+          "defIndex": 4753,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 4,
+          "quality": 4,
+          "itemId": "48128862448"
+        },
+        {
+          "defIndex": 5029,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561198158443519": {
+      "name": "Shadowman",
+      "crosshairCode": "CSGO-ecvFC-c9zRB-nZDfy-X6qeY-KxFdH",
+      "items": [
+        {
+          "defIndex": 19,
+          "paintIndex": 593,
+          "paintSeed": 375,
+          "rarity": 4,
+          "quality": 4,
+          "itemId": "31288482663",
+          "name": "P90",
+          "wear": 0.46598032
+        },
+        {
+          "defIndex": 59,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 5028,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561198179137205": {
+      "name": "ΟΑΕΔ Corp",
+      "crosshairCode": "CSGO-nqNff-YHihT-Jxxqi-jGKek-weaAB",
+      "items": [
+        {
+          "defIndex": 7,
+          "paintIndex": 72,
+          "paintSeed": 703,
+          "rarity": 2,
+          "quality": 4,
+          "itemId": "14903980546",
+          "name": "AK-47",
+          "wear": 0.35842809
+        },
+        {
+          "defIndex": 59,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 5028,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561198281562535": {
+      "name": "ChiliConPanard",
+      "crosshairCode": "CSGO-tKc98-ccEYF-XripR-Dk8tJ-EiKPJ",
+      "items": [
+        {
+          "defIndex": 40,
+          "paintIndex": 989,
+          "paintSeed": 312,
+          "rarity": 4,
+          "quality": 9,
+          "itemId": "53056439833",
+          "name": "SSG 08",
+          "wear": 0.11811471,
+          "statTrak": 356,
+          "stickers": [
+            {
+              "slot": 1,
+              "id": 8762,
+              "offsetX": -0.041839,
+              "offsetY": 0.023546
+            },
+            {
+              "slot": 0,
+              "id": 6637,
+              "offsetX": -0.144458,
+              "offsetY": 0.015863
+            },
+            {
+              "slot": 0,
+              "id": 9493,
+              "offsetX": -0.073415,
+              "offsetY": 0.014893
+            },
+            {
+              "slot": 0,
+              "id": 9578,
+              "offsetX": -0.174319,
+              "offsetY": -0.015595
+            },
+            {
+              "slot": 0,
+              "id": 9497,
+              "offsetX": -0.325091,
+              "offsetY": -0.016085
+            }
+          ]
+        },
+        {
+          "defIndex": 520,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 6,
+          "quality": 3,
+          "itemId": "52912157090",
+          "name": "Navaja Knife"
+        },
+        {
+          "defIndex": 5029,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561198813116173": {
+      "name": "Polpette2Panard",
+      "crosshairCode": "CSGO-wAD3c-ykt5L-zvZ98-vBisR-6sWPA",
+      "items": [
+        {
+          "defIndex": 27,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 4,
+          "name": "MAG-7"
+        },
+        {
+          "defIndex": 42,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 5029,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561198965369889": {
+      "name": "ne2sil",
+      "crosshairCode": "CSGO-VJH8R-d3yo6-KmwAm-2uwPu-zFAMK",
+      "items": [
+        {
+          "defIndex": 3,
+          "paintIndex": 1168,
+          "paintSeed": 262,
+          "rarity": 4,
+          "quality": 4,
+          "itemId": "53313014005",
+          "name": "Five-SeveN",
+          "wear": 0.36134666
+        },
+        {
+          "defIndex": 517,
+          "paintIndex": 5,
+          "paintSeed": 562,
+          "rarity": 6,
+          "quality": 3,
+          "itemId": "52496999930",
+          "name": "Paracord Knife",
+          "wear": 0.28812107
+        },
+        {
+          "defIndex": 5029,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561199070591506": {
+      "name": "Репетитор",
+      "crosshairCode": "CSGO-cDQYL-fS2VY-X6zEM-JzZS4-ziWjM",
+      "items": [
+        {
+          "defIndex": 33,
+          "paintIndex": 1436,
+          "paintSeed": 477,
+          "rarity": 4,
+          "quality": 4,
+          "itemId": "53276730139",
+          "name": "MP7",
+          "wear": 0.30839476
+        },
+        {
+          "defIndex": 42,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 5029,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    },
+    "76561199586244249": {
+      "name": "pablofucas2",
+      "crosshairCode": "CSGO-OHm7n-4XRAk-DfVQT-SRJJt-yjbcP",
+      "items": [
+        {
+          "defIndex": 30,
+          "paintIndex": 1322,
+          "paintSeed": 950,
+          "rarity": 2,
+          "quality": 4,
+          "itemId": "51550885673",
+          "name": "Tec-9",
+          "wear": 0.08823715
+        },
+        {
+          "defIndex": 59,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 0,
+          "quality": 0,
+          "name": "Knife"
+        },
+        {
+          "defIndex": 4780,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 6,
+          "quality": 4,
+          "itemId": "53355219986"
+        },
+        {
+          "defIndex": 5028,
+          "paintIndex": 0,
+          "paintSeed": 0,
+          "rarity": 1,
+          "quality": 0,
+          "name": "Agent"
+        }
+      ]
+    }
+  }
+}

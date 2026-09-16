@@ -13,6 +13,77 @@ namespace {
 
 inline constexpr double MS_PER_SEC = 1000.0;
 
+void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
+    for (auto& incoming : items) {
+        if (incoming.def_index == 0 && incoming.item_id == 0) {
+            continue;
+        }
+        LoadoutItem* existing = nullptr;
+        if (incoming.item_id != 0) {
+            for (auto& have : player.loadout) {
+                if (have.item_id == incoming.item_id) {
+                    existing = &have;
+                    break;
+                }
+            }
+        }
+        if (existing == nullptr) {
+            for (auto& have : player.loadout) {
+                if (have.def_index == incoming.def_index &&
+                    have.paint_index == incoming.paint_index &&
+                    have.paint_seed == incoming.paint_seed) {
+                    existing = &have;
+                    break;
+                }
+            }
+        }
+        if (existing == nullptr) {
+            player.loadout.push_back(std::move(incoming));
+            continue;
+        }
+        if (incoming.has_wear) {
+            existing->paint_wear = incoming.paint_wear;
+            existing->has_wear = true;
+        }
+        if (incoming.paint_index != 0) {
+            existing->paint_index = incoming.paint_index;
+        }
+        if (incoming.paint_seed != 0) {
+            existing->paint_seed = incoming.paint_seed;
+        }
+        if (!incoming.custom_name.empty()) {
+            existing->custom_name = std::move(incoming.custom_name);
+        }
+        if (!incoming.item_name.empty()) {
+            existing->item_name = std::move(incoming.item_name);
+        }
+        if (incoming.kill_eater_value >= 0) {
+            existing->kill_eater_value = incoming.kill_eater_value;
+        }
+        if (!incoming.stickers.empty()) {
+            existing->stickers = std::move(incoming.stickers);
+        }
+        if (!incoming.keychains.empty()) {
+            existing->keychains = std::move(incoming.keychains);
+        }
+        if (incoming.team != 0) {
+            existing->team = incoming.team;
+        }
+        if (incoming.slot >= 0) {
+            existing->slot = incoming.slot;
+        }
+        if (incoming.rarity != 0) {
+            existing->rarity = incoming.rarity;
+        }
+        if (incoming.quality != 0) {
+            existing->quality = incoming.quality;
+        }
+        if (incoming.music_index != 0) {
+            existing->music_index = incoming.music_index;
+        }
+    }
+}
+
 } // namespace
 
 void CollectingListener::setMap(std::string map, std::string workshop) {
@@ -148,6 +219,37 @@ void CollectingListener::noteRank(const PlayerRank& rank) {
     // Ranking can start at 0 (unranked) then populate; keep the highest.
     player->ranking = std::max(player->ranking, rank.ranking);
     player->competitive_wins = std::max(player->competitive_wins, rank.competitive_wins);
+}
+
+void CollectingListener::noteCrosshair(const SteamId& steam, const std::string& code) {
+    if (steam.empty() || code.empty()) {
+        return;
+    }
+    if (auto* player = findPlayer(steam)) {
+        player->crosshair_code = code;
+    }
+}
+
+void CollectingListener::applyLoadoutItems(const SteamId& steam, std::vector<LoadoutItem> items) {
+    if (steam.empty() || items.empty()) {
+        return;
+    }
+    ensurePlayer(steam, {}, 0);
+    if (auto* player = findPlayer(steam)) {
+        mergeLoadoutItems(*player, std::move(items));
+    }
+}
+
+void CollectingListener::applyLoadoutBySlot(int player_slot, std::vector<LoadoutItem> items) {
+    if (player_slot < 0 || items.empty()) {
+        return;
+    }
+    // Controller entity index is slot+1; userid/slot mapping uses slot directly.
+    const auto ITER = steam_by_userid.find(player_slot);
+    if (ITER == steam_by_userid.end()) {
+        return;
+    }
+    applyLoadoutItems(ITER->second, std::move(items));
 }
 
 } // namespace cyka::demo
