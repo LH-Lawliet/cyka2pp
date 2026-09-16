@@ -30,7 +30,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default T Gloves"
         }
       ]
     },
@@ -62,7 +62,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default T Gloves"
         },
         {
           "defIndex": 5501,
@@ -131,7 +131,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default CT Gloves"
         }
       ]
     },
@@ -163,12 +163,12 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default T Gloves"
         }
       ]
     },
     "76561198179137205": {
-      "name": "ΟΑΕΔ Corp",
+      "name": "\u039f\u0391\u0395\u0394 Corp",
       "crosshairCode": "CSGO-nqNff-YHihT-Jxxqi-jGKek-weaAB",
       "items": [
         {
@@ -195,7 +195,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default T Gloves"
         }
       ]
     },
@@ -261,7 +261,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default CT Gloves"
         }
       ]
     },
@@ -291,7 +291,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default CT Gloves"
         }
       ]
     },
@@ -325,12 +325,12 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default CT Gloves"
         }
       ]
     },
     "76561199070591506": {
-      "name": "Репетитор",
+      "name": "\u0420\u0435\u043f\u0435\u0442\u0438\u0442\u043e\u0440",
       "crosshairCode": "CSGO-cDQYL-fS2VY-X6zEM-JzZS4-ziWjM",
       "items": [
         {
@@ -357,7 +357,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default CT Gloves"
         }
       ]
     },
@@ -397,7 +397,7 @@
           "paintSeed": 0,
           "rarity": 1,
           "quality": 0,
-          "name": "Agent"
+          "name": "Default T Gloves"
         }
       ]
     }

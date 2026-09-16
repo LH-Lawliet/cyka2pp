@@ -321,18 +321,20 @@ void testLoadoutGoldenDemo() {
         CYKA_CHECK(ACTUAL.value("crosshairCode", "") == expected_player.value("crosshairCode", ""));
         CYKA_CHECK(ACTUAL["items"].is_array());
         CYKA_CHECK(expected_player["items"].is_array());
-        CYKA_CHECK(ACTUAL["items"].size() == expected_player["items"].size());
-        if (ACTUAL["items"].size() != expected_player["items"].size()) {
-            std::cerr << "loadout item count mismatch for " << steam
-                      << " actual=" << ACTUAL["items"].size()
-                      << " expected=" << expected_player["items"].size() << '\n';
-            continue;
-        }
-        for (std::size_t idx = 0; idx < ACTUAL["items"].size(); ++idx) {
-            if (!itemMatches(ACTUAL["items"][idx], expected_player["items"][idx])) {
-                std::cerr << "loadout item mismatch for " << steam << " idx=" << idx
-                          << "\n actual=" << ACTUAL["items"][idx].dump()
-                          << "\n expected=" << expected_player["items"][idx].dump() << '\n';
+        // Mid-match entity scrape may add weapons beyond EndOfMatch showcase;
+        // golden items must all still be present.
+        CYKA_CHECK(ACTUAL["items"].size() >= expected_player["items"].size());
+        for (const auto& expected_item : expected_player["items"]) {
+            bool found = false;
+            for (const auto& actual_item : ACTUAL["items"]) {
+                if (itemMatches(actual_item, expected_item)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                std::cerr << "loadout missing expected item for " << steam << "\n expected="
+                          << expected_item.dump() << "\n actual=" << ACTUAL["items"].dump() << '\n';
                 CYKA_CHECK(false);
             } else {
                 CYKA_CHECK(true);

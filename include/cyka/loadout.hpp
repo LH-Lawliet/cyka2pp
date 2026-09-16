@@ -1,6 +1,7 @@
 #pragma once
 
-/// Match cosmetics extracted from CS2 demos (end-of-match / loadout usermessages).
+/// Match cosmetics extracted from CS2 demos (end-of-match / loadout usermessages
+/// plus mid-match weapon entity paint attributes).
 
 #include <cstdint>
 #include <string>

@@ -107,6 +107,7 @@ set(CYKA_LIB_SOURCES
     src/demo/ent/string_table_blob.cpp
     src/demo/ent/baselines.cpp
     src/demo/ent/pose_sampler.cpp
+    src/demo/ent/skin_sampler.cpp
     src/demo/ent_bridge.cpp
     src/demo/econ_item.cpp
     src/demo/debug.cpp

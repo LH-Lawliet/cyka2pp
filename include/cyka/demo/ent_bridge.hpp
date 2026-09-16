@@ -40,6 +40,7 @@ class EntityBridge {
   private:
     void publishPlayers();
     void publishGameRules(Tick tick);
+    void publishObservedSkins();
     void handleCsUserMessage(std::uint32_t msg_type, std::span<const std::uint8_t> payload);
 
     CollectingListener* listener;
@@ -47,6 +48,8 @@ class EntityBridge {
     ent::PoseSampler sampler;
     std::vector<ent::PoseSample> poses;
     std::vector<ent::PlayerIdent> idents;
+    /// Throttle mid-match skin scrapes (entity props change slowly).
+    Tick last_skin_sample_tick{-1};
     /// svc_CreateStringTable order defines table ids; remember the baseline one.
     std::vector<std::int32_t> baseline_table_ids;
     std::int32_t next_table_id{0};

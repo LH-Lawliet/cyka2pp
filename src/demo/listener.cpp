@@ -41,6 +41,9 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
             player.loadout.push_back(std::move(incoming));
             continue;
         }
+        if (incoming.item_id != 0 && existing->item_id == 0) {
+            existing->item_id = incoming.item_id;
+        }
         if (incoming.has_wear) {
             existing->paint_wear = incoming.paint_wear;
             existing->has_wear = true;
@@ -244,12 +247,13 @@ void CollectingListener::applyLoadoutBySlot(int player_slot, std::vector<Loadout
     if (player_slot < 0 || items.empty()) {
         return;
     }
-    // Controller entity index is slot+1; userid/slot mapping uses slot directly.
-    const auto ITER = steam_by_userid.find(player_slot);
-    if (ITER == steam_by_userid.end()) {
+    // playerslot is the controller slot / userid low-byte — use the same
+    // resolution path as game events (not a raw steam_by_userid lookup).
+    const SteamId STEAM = steamForUserid(player_slot);
+    if (STEAM.empty()) {
         return;
     }
-    applyLoadoutItems(ITER->second, std::move(items));
+    applyLoadoutItems(STEAM, std::move(items));
 }
 
 } // namespace cyka::demo

@@ -66,9 +66,9 @@ const std::unordered_map<std::uint32_t, const char*> ITEM_NAMES{
     {523,  "Talon Knife"       },
     {525,  "Skeleton Knife"    },
     {526,  "Kukri Knife"       },
-    // Default agents (EndOfMatch often includes these)
-    {5028, "Agent"             },
-    {5029, "Agent"             },
+    // Default gloves (EndOfMatch often includes these)
+    {5028, "Default T Gloves"  },
+    {5029, "Default CT Gloves" },
     // Gloves (common)
     {5027, "Broken Fang Gloves"},
     {5030, "Sport Gloves"      },

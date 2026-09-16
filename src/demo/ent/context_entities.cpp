@@ -29,7 +29,16 @@ inline constexpr std::uint32_t PVS_SKIP_BIT = 0x01U;
 bool isTrackedClass(std::string_view name) {
     static const std::unordered_set<std::string_view> TRACKED{
         "CCSPlayerController", "CCSPlayerPawn", "CCSGameRulesProxy"};
-    return TRACKED.contains(name);
+    if (TRACKED.contains(name)) {
+        return true;
+    }
+    // Weapon / knife entities carry paint kit + OriginalOwnerXuid mid-match.
+    // Match demoparser's class heuristic (Weapon/AK/DEagle/Knife, not Player*).
+    if (name.contains("Player")) {
+        return false;
+    }
+    return name.contains("Weapon") || name.contains("AK") || name.contains("DEagle") ||
+           name.contains("Knife") || name == "CC4";
 }
 
 struct PacketHeader {

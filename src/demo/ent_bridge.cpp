@@ -3,17 +3,23 @@
 #include "cyka/demo/econ_item.hpp"
 #include "cyka/demo/ent/baselines.hpp"
 #include "cyka/demo/ent/entity.hpp"
+#include "cyka/demo/ent/skin_sampler.hpp"
 #include "cyka/demo/proto_wire.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace cyka::demo {
 namespace {
 
 inline constexpr int PROTO_FIELD_STRING_TABLES = 1;
 inline constexpr int PROTO_FIELD_TABLE_ID = 1;
+/// Sample weapon/entity cosmetics about twice per second at 64-tick.
+inline constexpr Tick SKIN_SAMPLE_INTERVAL{32};
 
 } // namespace
 
@@ -175,11 +181,33 @@ void EntityBridge::publishGameRules(Tick tick) {
     }
 }
 
+void EntityBridge::publishObservedSkins() {
+    if (listener == nullptr) {
+        return;
+    }
+    std::vector<ent::ObservedSkin> observed;
+    ent::SkinSampler::collect(ctx, observed);
+    if (observed.empty()) {
+        return;
+    }
+    std::unordered_map<std::string, std::vector<LoadoutItem>> by_steam;
+    for (auto& row : observed) {
+        by_steam[std::to_string(row.steam_id)].push_back(std::move(row.item));
+    }
+    for (auto& [steam, items] : by_steam) {
+        listener->applyLoadoutItems(steam, std::move(items));
+    }
+}
+
 void EntityBridge::afterPacket(Tick tick) {
     if (!ctx.ready()) {
         return;
     }
     publishGameRules(tick);
+    if (last_skin_sample_tick < 0 || tick - last_skin_sample_tick >= SKIN_SAMPLE_INTERVAL) {
+        last_skin_sample_tick = tick;
+        publishObservedSkins();
+    }
     if (!sampler.due(tick)) {
         return;
     }
