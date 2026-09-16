@@ -29,12 +29,17 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
         }
         if (existing == nullptr) {
             for (auto& have : player.loadout) {
-                if (have.def_index == incoming.def_index &&
-                    have.paint_index == incoming.paint_index &&
-                    have.paint_seed == incoming.paint_seed) {
-                    existing = &have;
-                    break;
+                if (have.def_index != incoming.def_index ||
+                    have.paint_index != incoming.paint_index ||
+                    have.paint_seed != incoming.paint_seed) {
+                    continue;
                 }
+                // Keep T and CT rows separate when both sides are known.
+                if (have.team != 0 && incoming.team != 0 && have.team != incoming.team) {
+                    continue;
+                }
+                existing = &have;
+                break;
             }
         }
         if (existing == nullptr) {
@@ -69,8 +74,13 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
         if (!incoming.keychains.empty()) {
             existing->keychains = std::move(incoming.keychains);
         }
+        // Same econ item seen on both sides → shared (show under T and CT).
         if (incoming.team != 0) {
-            existing->team = incoming.team;
+            if (existing->team == 0) {
+                existing->team = incoming.team;
+            } else if (existing->team != incoming.team) {
+                existing->team = 0;
+            }
         }
         if (incoming.slot >= 0) {
             existing->slot = incoming.slot;

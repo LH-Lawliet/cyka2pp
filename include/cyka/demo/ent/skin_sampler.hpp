@@ -20,7 +20,8 @@ struct ObservedSkin {
 /// few items).
 ///
 /// Weapons are attributed only via OriginalOwnerXuid (the buyer / econ owner),
-/// so buy-and-drop still counts and pickups do not.
+/// so buy-and-drop still counts and pickups do not. Team (2=T / 3=CT) is kept
+/// per observation so both halves survive side switches.
 class SkinSampler {
   public:
     /// Collect unique (steam, def, paint, seed) rows visible at this tick.

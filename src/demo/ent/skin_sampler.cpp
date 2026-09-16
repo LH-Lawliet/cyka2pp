@@ -268,8 +268,10 @@ void pushUnique(std::vector<ObservedSkin>& out,
     if (team == TEAM_T || team == TEAM_CT) {
         item.team = team;
     }
-    std::string key = std::to_string(steam) + ':' + std::to_string(item.def_index) + ':' +
-                      std::to_string(item.paint_index) + ':' + std::to_string(item.paint_seed);
+    std::string key =
+        std::to_string(steam) + ':' + std::to_string(item.def_index) + ':' +
+        std::to_string(item.paint_index) + ':' + std::to_string(item.paint_seed) + ':' +
+        std::to_string(team);
     if (!seen.insert(std::move(key)).second) {
         return;
     }
