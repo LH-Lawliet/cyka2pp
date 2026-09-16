@@ -10,7 +10,8 @@ permissions:
   contents: write
 
 env:
-  GCC_VERSION: "16"
+  # Same Clang as CI — Ubuntu has no g++-16 package for noble.
+  LLVM_VERSION: "22"
 
 jobs:
   build:
@@ -30,17 +31,18 @@ jobs:
 
       - name: Install toolchain
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-toolchain.list
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build "g++-${GCC_VERSION}"
+          sudo apt-get install -y cmake ninja-build "clang-${LLVM_VERSION}"
 
       - name: Configure
         run: |
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER="g++-${GCC_VERSION}" \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCYKA_FETCH_DEPS=ON \
             -DCYKA_STATIC=ON \

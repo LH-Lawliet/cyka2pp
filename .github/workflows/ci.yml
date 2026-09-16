@@ -7,10 +7,8 @@ on:
     branches: [main]
 
 env:
-  # Keep format/tidy on a modern Clang; Ubuntu apt clang-18 is too old for this tree.
+  # Ubuntu 24.04 has no g++-16; use LLVM apt (same as tidy) for C++26 builds.
   LLVM_VERSION: "22"
-  # Match local Fedora toolchain (#embed / C++26); Ubuntu 24.04 default is still 14.
-  GCC_VERSION: "16"
 
 jobs:
   format:
@@ -77,17 +75,18 @@ jobs:
 
       - name: Install toolchain
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-toolchain.list
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build "g++-${GCC_VERSION}"
+          sudo apt-get install -y cmake ninja-build "clang-${LLVM_VERSION}"
 
       - name: Configure (x86-64-v2, fetched deps, static libstdc++)
         run: |
           cmake -G Ninja -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER="g++-${GCC_VERSION}" \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCYKA_FETCH_DEPS=ON \
             -DCYKA_STATIC=ON \
