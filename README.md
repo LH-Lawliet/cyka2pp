@@ -287,28 +287,44 @@ cross is view center.
 
 ### Perf notes
 
-Measured on this machine (Release build), mid Nuke demo
-(`testdata/demos/3835689269611987518.dem`), **without** map meshes (parse-bound):
+Measured on a **12th Gen Intel Core i7-1255U** (10 cores / 12 threads,
+up to 4.7 GHz) with **15 GiB RAM**, Release build, default `CYKA_THREADS`
+(= hardware concurrency). Demo:
+`testdata/demos/3835689269611987518.dem` (mid Nuke, ~213 MB).
+`--ttd-size` / POV grid is 16:9; default **640×360**, with **480×270** (a bit
+less) and **854×480** (a bit more) shown for comparison. Maps from a local
+`cs2-maps-tri` checkout. Set `CYKA_STAGE_TIMING=1` to print per-stage ms on
+stderr.
 
+| Mode | `--ttd-size` | Wall | Notes (from stage timing) |
+| ---- | ------------ | ---- | ------------------------- |
+| `analyze` (no `--maps-dir`) | n/a | **~4.0 s** | parse ~3.8 s (**~96%**); aim ~7 ms |
+| same, `CYKA_THREADS=1` | n/a | **~4.1 s** | still parse-bound; threads barely matter |
+| `analyze` + `--maps-dir` | 480×270 | **~4.2 s** | parse ~3.6 s, aim/TTD ~0.36 s |
+| `analyze` + `--maps-dir` | **640×360** | **~4.5 s** | parse ~3.9 s, aim/TTD ~0.48 s |
+| `analyze` + `--maps-dir` | 854×480 | **~4.5 s** | parse ~3.6 s, aim/TTD ~0.68 s |
+| + `--ttd-trace-dir` (~430 POV BMPs) | 480×270 | **~26 s** | ~48 ms/frame raycast |
+| + `--ttd-trace-dir` (~430 POV BMPs) | **640×360** | **~46 s** | ~90 ms/frame raycast |
+| + `--ttd-trace-dir` (~430 POV BMPs) | 854×480 | **~68 s** | ~137 ms/frame raycast |
 
-| Mode                         | Wall    |
-| ---------------------------- | ------- |
-| `analyze` (default threads)  | **~4.4s** |
-| `CYKA_THREADS=1`             | **~4.7s** |
+**Without maps**, wall time is almost entirely demo parse (entity decode is
+serial). Samples / metrics / highlights are tens–hundreds of ms; highlight
+tagging is indexed (was O(kills × pose frames), ~2 s on this demo).
 
+**With `--maps-dir`**, production `analyze` stays in the **~4–5 s** band on this
+laptop. Mesh LOS / TTD adds a few hundred ms and scales with `--ttd-size` and
+`CYKA_THREADS` (shared pool across LOS, TTD, spotted, counter-strafe, tags).
+Parse still dominates wall; aim TTD uses AABB-scoped hitbox/map rays, so
+resolution moves aim more than total wall.
 
-With `--maps-dir` meshes, aim/TTD LOS dominates and scales with `CYKA_THREADS`
-(thread pool reused across LOS / TTD / spotted / counter-strafe / highlight
-tagging). Set `CYKA_STAGE_TIMING=1` to print per-stage ms on stderr.
+**With `--ttd-trace-dir`**, cost is dominated by optional POV image dumps
+(skinned victim ~1.6k tris, adaptive shade per tick around selected kills —
+~430 frames here). That path is debug/gallery only; production JSON analyze
+does not need it. Dump wall scales roughly with pixel count (~48 → 90 →
+137 ms/frame across the three sizes above).
 
-Typical stage split without maps: **parse ~90%**, samples/aim/highlights small.
-Highlight tagging used to be O(kills × pose frames) (~2s); it is now indexed.
-
-The **~10s goal** is for production `analyze` (JSON/table) — that path still
-lands around **4–5s** without maps. POV dumps are optional debug; each frame shades an adaptive
-image with a skinned victim (~1.6k tris) so dump wall scales with resolution
-(~46 ms/frame @640, ~150 ms/frame @720). Analyze TTD itself stays AABB-scoped
-hitbox/map rays and barely moves with `--ttd-size`.
+The **~10 s** production goal remains met: scoreboard/aim JSON without POV
+dumps is **~4–5 s** with or without maps on this machine.
 
 ## Demo corpus and cross-parser checks
 
