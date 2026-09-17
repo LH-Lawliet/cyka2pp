@@ -123,14 +123,17 @@ struct AngleQuery {
 }
 
 [[nodiscard]] inline const Frame* frameAtOrBefore(const Samples& samples, Tick tick) {
-    const Frame* best_frame = nullptr;
-    for (const auto& frame : samples.frames) {
-        if (frame.tick > tick) {
-            break;
-        }
-        best_frame = &frame;
+    const auto& frames = samples.frames;
+    if (frames.empty()) {
+        return nullptr;
     }
-    return best_frame;
+    auto iter =
+        std::ranges::upper_bound(frames, tick, {}, [](const Frame& frame) { return frame.tick; });
+    if (iter == frames.begin()) {
+        return nullptr;
+    }
+    --iter;
+    return &(*iter);
 }
 
 [[nodiscard]] inline const FramePose* findPose(const Frame& frame, const SteamId& steam) {

@@ -288,19 +288,24 @@ cross is view center.
 ### Perf notes
 
 Measured on this machine (Release build), mid Nuke demo
-(`testdata/demos/3835689269611987518.dem`, `--maps-dir` meshes loaded), after
-meshoptimizer POV silhouettes:
+(`testdata/demos/3835689269611987518.dem`), **without** map meshes (parse-bound):
 
 
-| Mode                                                    | Wall       |
-| ------------------------------------------------------- | ---------- |
-| `analyze` (default 640×360 TTD grid), no traces         | **~5.1s**  |
-| same + `--ttd-trace-dir` @ 640×360 (~430 frames)        | **~27s**   |
-| same + `--ttd-trace-dir` @ 1280×720                     | **~80s**   |
+| Mode                         | Wall    |
+| ---------------------------- | ------- |
+| `analyze` (default threads)  | **~4.4s** |
+| `CYKA_THREADS=1`             | **~4.7s** |
 
+
+With `--maps-dir` meshes, aim/TTD LOS dominates and scales with `CYKA_THREADS`
+(thread pool reused across LOS / TTD / spotted / counter-strafe / highlight
+tagging). Set `CYKA_STAGE_TIMING=1` to print per-stage ms on stderr.
+
+Typical stage split without maps: **parse ~90%**, samples/aim/highlights small.
+Highlight tagging used to be O(kills × pose frames) (~2s); it is now indexed.
 
 The **~10s goal** is for production `analyze` (JSON/table) — that path still
-lands around **5s**. POV dumps are optional debug; each frame shades an adaptive
+lands around **4–5s** without maps. POV dumps are optional debug; each frame shades an adaptive
 image with a skinned victim (~1.6k tris) so dump wall scales with resolution
 (~46 ms/frame @640, ~150 ms/frame @720). Analyze TTD itself stays AABB-scoped
 hitbox/map rays and barely moves with `--ttd-size`.

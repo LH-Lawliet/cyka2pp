@@ -17,14 +17,6 @@
           "wear": 0.05914062
         },
         {
-          "defIndex": 59,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
-        },
-        {
           "defIndex": 5028,
           "paintIndex": 0,
           "paintSeed": 0,
@@ -47,14 +39,6 @@
           "itemId": "856862327",
           "name": "SSG 08",
           "wear": 0.41552687
-        },
-        {
-          "defIndex": 59,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
         },
         {
           "defIndex": 5028,
@@ -150,14 +134,6 @@
           "wear": 0.46598032
         },
         {
-          "defIndex": 59,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
-        },
-        {
           "defIndex": 5028,
           "paintIndex": 0,
           "paintSeed": 0,
@@ -168,7 +144,7 @@
       ]
     },
     "76561198179137205": {
-      "name": "\u039f\u0391\u0395\u0394 Corp",
+      "name": "ΟΑΕΔ Corp",
       "crosshairCode": "CSGO-nqNff-YHihT-Jxxqi-jGKek-weaAB",
       "items": [
         {
@@ -180,14 +156,6 @@
           "itemId": "14903980546",
           "name": "AK-47",
           "wear": 0.35842809
-        },
-        {
-          "defIndex": 59,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
         },
         {
           "defIndex": 5028,
@@ -278,14 +246,6 @@
           "name": "MAG-7"
         },
         {
-          "defIndex": 42,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
-        },
-        {
           "defIndex": 5029,
           "paintIndex": 0,
           "paintSeed": 0,
@@ -330,7 +290,7 @@
       ]
     },
     "76561199070591506": {
-      "name": "\u0420\u0435\u043f\u0435\u0442\u0438\u0442\u043e\u0440",
+      "name": "Репетитор",
       "crosshairCode": "CSGO-cDQYL-fS2VY-X6zEM-JzZS4-ziWjM",
       "items": [
         {
@@ -342,14 +302,6 @@
           "itemId": "53276730139",
           "name": "MP7",
           "wear": 0.30839476
-        },
-        {
-          "defIndex": 42,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
         },
         {
           "defIndex": 5029,
@@ -374,14 +326,6 @@
           "itemId": "51550885673",
           "name": "Tec-9",
           "wear": 0.08823715
-        },
-        {
-          "defIndex": 59,
-          "paintIndex": 0,
-          "paintSeed": 0,
-          "rarity": 0,
-          "quality": 0,
-          "name": "Knife"
         },
         {
           "defIndex": 4780,

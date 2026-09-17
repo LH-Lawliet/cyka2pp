@@ -16,4 +16,7 @@ void stampAirborne(Match& match, const aim::Samples& samples);
 [[nodiscard]] std::vector<std::string> killTags(
     const Kill& kill, const Match& match, const aim::Samples& samples);
 
+/// Fill `Kill::tags` for every kill using indexed pose/shot lookups (fast path).
+void stampAllKillTags(Match& match, const aim::Samples& samples);
+
 } // namespace cyka::highlights

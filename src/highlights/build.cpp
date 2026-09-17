@@ -3,8 +3,11 @@
 #include "cyka/highlights/tags.hpp"
 
 #include <algorithm>
+#include <array>
 #include <set>
 #include <sstream>
+#include <string_view>
+#include <vector>
 
 namespace cyka::highlights {
 namespace {
@@ -12,6 +15,37 @@ namespace {
 inline constexpr double MULTI_WINDOW_SEC = 120.0;
 inline constexpr int DEATH_TAIL_SEC = 3;
 inline constexpr int KILL_PRE_SEC = 5;
+
+/// Canonical emoji order used by killTags — used to merge chain tags without
+/// recomputing pose/shot scans.
+constexpr std::array TAG_EMOJIS = {
+    std::string_view{"🎯"},
+    std::string_view{"🧱"},
+    std::string_view{"💨"},
+    std::string_view{"🙈"},
+    std::string_view{"🦅"},
+    std::string_view{"🔭"},
+    std::string_view{"☝️"},
+    std::string_view{"💫"},
+    std::string_view{"🥶"},
+    std::string_view{"🚑"},
+    std::string_view{"✈️"},
+    std::string_view{"🎳"},
+    std::string_view{"⚡"},
+};
+
+void appendUniqueTagsFromJoined(
+    std::string_view joined, std::vector<std::string>& out, std::set<std::string>& seen) {
+    for (const std::string_view EMOJI : TAG_EMOJIS) {
+        if (!joined.contains(EMOJI)) {
+            continue;
+        }
+        const std::string KEY{EMOJI};
+        if (seen.insert(KEY).second) {
+            out.push_back(KEY);
+        }
+    }
+}
 
 std::string joinTags(const std::vector<std::string>& tags) {
     std::string out;
@@ -24,7 +58,7 @@ std::string joinTags(const std::vector<std::string>& tags) {
 } // namespace
 
 void build(Match& match, const std::vector<SteamId>& steam_filter, const aim::Samples& samples) {
-    stampAirborne(match, samples);
+    stampAllKillTags(match, samples);
     const std::set<SteamId> FILTER(steam_filter.begin(), steam_filter.end());
     const double TICKRATE = match.tickrate > 0 ? match.tickrate : 64.0;
     const int WINDOW = static_cast<int>(MULTI_WINDOW_SEC * TICKRATE);
@@ -35,12 +69,6 @@ void build(Match& match, const std::vector<SteamId>& steam_filter, const aim::Sa
         sids.push_back(steam_id);
     }
     std::ranges::sort(sids);
-
-    for (auto& kill_ptr : match.kills) {
-        if (kill_ptr) {
-            kill_ptr->tags = joinTags(killTags(*kill_ptr, match, samples));
-        }
-    }
 
     for (const auto& round_ptr : match.rounds) {
         if (!round_ptr) {
@@ -118,11 +146,7 @@ void build(Match& match, const std::vector<SteamId>& steam_filter, const aim::Sa
                 std::vector<std::string> weapons;
                 std::set<std::string> weapons_seen;
                 for (const Kill* kill : chain) {
-                    for (auto& tag : killTags(*kill, match, samples)) {
-                        if (seen.insert(tag).second) {
-                            all_tags.push_back(tag);
-                        }
-                    }
+                    appendUniqueTagsFromJoined(kill->tags, all_tags, seen);
                     if (!kill->weapon_name.empty() &&
                         weapons_seen.insert(kill->weapon_name).second) {
                         weapons.push_back(kill->weapon_name);

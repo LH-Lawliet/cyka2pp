@@ -31,40 +31,47 @@ void stampWeapons(Samples& out) {
     }
 }
 
+[[nodiscard]] const Frame* frameAtOrBefore(const std::vector<Frame>& frames, Tick tick) {
+    if (frames.empty()) {
+        return nullptr;
+    }
+    auto iter =
+        std::ranges::upper_bound(frames, tick, {}, [](const Frame& frame) { return frame.tick; });
+    if (iter == frames.begin()) {
+        return nullptr;
+    }
+    --iter;
+    return &(*iter);
+}
+
 void attachSpeedOnly(ShotSample& shot, const std::vector<Frame>& frames) {
-    for (int idx = static_cast<int>(frames.size()) - 1; idx >= 0; --idx) {
-        const Frame& frame = frames[static_cast<std::size_t>(idx)];
-        if (frame.tick > shot.tick) {
-            continue;
-        }
-        for (const auto& pose : frame.poses) {
-            if (pose.steam_id == shot.steam_id && pose.speed >= 0) {
-                shot.speed = pose.speed;
-                return;
-            }
-        }
+    const Frame* frame = frameAtOrBefore(frames, shot.tick);
+    if (frame == nullptr) {
         return;
+    }
+    for (const auto& pose : frame->poses) {
+        if (pose.steam_id == shot.steam_id && pose.speed >= 0) {
+            shot.speed = pose.speed;
+            return;
+        }
     }
 }
 
 void attachPoseToShot(ShotSample& shot, const std::vector<Frame>& frames) {
-    for (int idx = static_cast<int>(frames.size()) - 1; idx >= 0; --idx) {
-        const Frame& frame = frames[static_cast<std::size_t>(idx)];
-        if (frame.tick > shot.tick) {
+    const Frame* frame = frameAtOrBefore(frames, shot.tick);
+    if (frame == nullptr) {
+        return;
+    }
+    for (const auto& pose : frame->poses) {
+        if (pose.steam_id != shot.steam_id) {
             continue;
         }
-        for (const auto& pose : frame.poses) {
-            if (pose.steam_id != shot.steam_id) {
-                continue;
-            }
-            shot.pitch = pose.pitch;
-            shot.yaw = pose.yaw;
-            shot.pos = pose.pos;
-            shot.scoped = pose.scoped;
-            if (pose.speed >= 0) {
-                shot.speed = pose.speed;
-            }
-            return;
+        shot.pitch = pose.pitch;
+        shot.yaw = pose.yaw;
+        shot.pos = pose.pos;
+        shot.scoped = pose.scoped;
+        if (pose.speed >= 0) {
+            shot.speed = pose.speed;
         }
         return;
     }
