@@ -3,6 +3,7 @@
 #include "cyka/csdata/items.hpp"
 #include "cyka/demo/steam_id.hpp"
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -116,11 +117,16 @@ const std::string QUALITY = "m_iEntityQuality";
     return digits;
 }
 
-[[nodiscard]] std::string attrPath(int index, std::string_view leaf) {
-    // CS2 flattens econ attrs onto the weapon root as m_Attributes (utlvector).
-    std::string path = "m_Attributes.";
+[[nodiscard]] std::string attrPathAt(std::string_view root, int index, std::string_view leaf) {
+    std::string path(root);
     path += paddedAttrIndex(index);
     path += '.';
+    path += leaf;
+    return path;
+}
+
+[[nodiscard]] std::string gloveProp(std::string_view leaf) {
+    std::string path = "m_EconGloves.";
     path += leaf;
     return path;
 }
@@ -173,11 +179,12 @@ const std::string QUALITY = "m_iEntityQuality";
     return static_cast<int>(RAW);
 }
 
-[[nodiscard]] const EntValue* attrRawValue(const Entity& weapon, int attr_idx) {
-    if (const auto* raw = weapon.prop(attrPath(attr_idx, "m_iRawValue32")); raw != nullptr) {
+[[nodiscard]] const EntValue* attrRawValueAt(
+    const Entity& ent, std::string_view root, int attr_idx) {
+    if (const auto* raw = ent.prop(attrPathAt(root, attr_idx, "m_iRawValue32")); raw != nullptr) {
         return raw;
     }
-    return weapon.prop(attrPath(attr_idx, "m_flValue"));
+    return ent.prop(attrPathAt(root, attr_idx, "m_flValue"));
 }
 
 struct WeaponPaint {
@@ -188,10 +195,10 @@ struct WeaponPaint {
     int stat_trak{-1};
 };
 
-void readAttributes(const Entity& weapon, WeaponPaint& paint) {
+void readAttributesAt(const Entity& ent, std::string_view root, WeaponPaint& paint) {
     for (int attr_idx = 0; attr_idx < MAX_ATTRS; ++attr_idx) {
-        const auto DEF_PATH = attrPath(attr_idx, "m_iAttributeDefinitionIndex");
-        const auto* def_val = weapon.prop(DEF_PATH);
+        const auto DEF_PATH = attrPathAt(root, attr_idx, "m_iAttributeDefinitionIndex");
+        const auto* def_val = ent.prop(DEF_PATH);
         if (def_val == nullptr) {
             continue;
         }
@@ -201,7 +208,7 @@ void readAttributes(const Entity& weapon, WeaponPaint& paint) {
             paint.stat_trak = 0;
             continue;
         }
-        const auto* raw_val = attrRawValue(weapon, attr_idx);
+        const auto* raw_val = attrRawValueAt(ent, root, attr_idx);
         if (raw_val == nullptr) {
             continue;
         }
@@ -220,7 +227,7 @@ void readAttributes(const Entity& weapon, WeaponPaint& paint) {
         }
     }
     if (paint.paint == 0) {
-        if (const auto* raw = attrRawValue(weapon, 0); raw != nullptr) {
+        if (const auto* raw = attrRawValueAt(ent, root, 0); raw != nullptr) {
             const auto CANDIDATE = rawAttrAsU32(*raw);
             if (CANDIDATE > 0 && CANDIDATE < MAX_REASONABLE_PAINT) {
                 paint.paint = CANDIDATE;
@@ -229,19 +236,30 @@ void readAttributes(const Entity& weapon, WeaponPaint& paint) {
     }
 }
 
-void readFallback(const Entity& weapon, WeaponPaint& paint) {
-    if (const auto* paint_val = weapon.prop(FALLBACK_PAINT);
+void readAttributes(const Entity& weapon, WeaponPaint& paint) {
+    readAttributesAt(weapon, "m_Attributes.", paint);
+}
+
+void readFallbackAt(const Entity& ent, std::string_view prefix, WeaponPaint& paint) {
+    auto prefixed = [&](std::string_view leaf) {
+        std::string path(prefix);
+        path += leaf;
+        return path;
+    };
+    if (const auto* paint_val = ent.prop(prefixed(FALLBACK_PAINT));
         paint_val != nullptr && paint.paint == 0) {
         paint.paint = static_cast<std::uint32_t>(paint_val->asU64());
     }
-    if (const auto* seed_val = weapon.prop(FALLBACK_SEED); seed_val != nullptr && paint.seed == 0) {
+    if (const auto* seed_val = ent.prop(prefixed(FALLBACK_SEED));
+        seed_val != nullptr && paint.seed == 0) {
         paint.seed = static_cast<std::uint32_t>(seed_val->asU64());
     }
-    if (const auto* wear_val = weapon.prop(FALLBACK_WEAR); wear_val != nullptr && !paint.has_wear) {
+    if (const auto* wear_val = ent.prop(prefixed(FALLBACK_WEAR));
+        wear_val != nullptr && !paint.has_wear) {
         paint.wear = wear_val->asF32();
         paint.has_wear = paint.wear > 0.F && paint.wear < WEAR_MAX_INCLUSIVE;
     }
-    if (const auto* stat_val = weapon.prop(FALLBACK_STAT);
+    if (const auto* stat_val = ent.prop(prefixed(FALLBACK_STAT));
         stat_val != nullptr && paint.stat_trak < 0) {
         // Prefer signed read: default non-ST is -1 (0xFFFFFFFF as uint).
         int stat = -1;
@@ -264,6 +282,24 @@ void readFallback(const Entity& weapon, WeaponPaint& paint) {
     }
 }
 
+void readFallback(const Entity& weapon, WeaponPaint& paint) {
+    readFallbackAt(weapon, "", paint);
+}
+
+[[nodiscard]] std::uint64_t itemIdAt(const Entity& ent, std::string_view prefix) {
+    auto prefixed = [&](std::string_view leaf) {
+        std::string path(prefix);
+        path += leaf;
+        return path;
+    };
+    const auto* high = ent.prop(prefixed(ITEM_ID_HIGH));
+    const auto* low = ent.prop(prefixed(ITEM_ID_LOW));
+    if (high == nullptr || low == nullptr) {
+        return 0;
+    }
+    return (high->asU64() << STEAM_HIGH_SHIFT) | (low->asU64() & STEAM_LOW_MASK);
+}
+
 /// SteamID of whoever purchased / owns this econ item. Survives drop + pickup.
 [[nodiscard]] std::uint64_t originalOwnerSteam(const Entity& weapon) {
     const auto* low = weapon.prop(OWNER_LOW);
@@ -276,12 +312,7 @@ void readFallback(const Entity& weapon, WeaponPaint& paint) {
 }
 
 [[nodiscard]] std::uint64_t itemIdOf(const Entity& weapon) {
-    const auto* high = weapon.prop(ITEM_ID_HIGH);
-    const auto* low = weapon.prop(ITEM_ID_LOW);
-    if (high == nullptr || low == nullptr) {
-        return 0;
-    }
-    return (high->asU64() << STEAM_HIGH_SHIFT) | (low->asU64() & STEAM_LOW_MASK);
+    return itemIdAt(weapon, "");
 }
 
 [[nodiscard]] LoadoutItem itemFromWeapon(const Entity& weapon) {
@@ -441,6 +472,14 @@ void collectGlovesFromPawns(const EntityContext& ctx,
                             const OwnerMaps& maps,
                             std::vector<ObservedSkin>& out,
                             std::unordered_set<std::string>& seen) {
+    // Gloves live on CCSPlayerPawn.m_EconGloves (CEconItemView). The pawn's
+    // top-level m_iItemDefinitionIndex is often the agent, so reading that
+    // alone only sees gloves on the rare ticks where the root def is a glove.
+    static constexpr std::array GLOVE_ATTR_ROOTS = {
+        std::string_view{"m_EconGloves.m_NetworkedDynamicAttributes.m_Attributes."},
+        std::string_view{"m_EconGloves.m_AttributeList.m_Attributes."},
+        std::string_view{"m_EconGloves.m_Attributes."},
+    };
     for (const Entity* pawn : ctx.tracked()) {
         if (pawn == nullptr || !isPawn(*pawn)) {
             continue;
@@ -450,27 +489,75 @@ void collectGlovesFromPawns(const EntityContext& ctx,
             continue;
         }
         LoadoutItem item;
-        if (const auto* def = pawn->prop(ITEM_DEF); def != nullptr) {
-            item.def_index = static_cast<std::uint32_t>(def->asU64());
+        if (const auto* glove_def = pawn->prop(gloveProp(ITEM_DEF)); glove_def != nullptr) {
+            item.def_index = static_cast<std::uint32_t>(glove_def->asU64());
         }
-        // Glove defs only — pawn item def may also be an agent.
+        if (!isGloveDef(item.def_index)) {
+            // Legacy fallback: some older demos only expose glove def on the root.
+            if (const auto* def = pawn->prop(ITEM_DEF); def != nullptr) {
+                item.def_index = static_cast<std::uint32_t>(def->asU64());
+            }
+        }
         if (!isGloveDef(item.def_index)) {
             continue;
         }
         WeaponPaint paint;
-        readFallback(*pawn, paint);
-        readAttributes(*pawn, paint);
+        readFallbackAt(*pawn, "m_EconGloves.", paint);
+        if (paint.paint == 0 && paint.seed == 0 && !paint.has_wear) {
+            readFallback(*pawn, paint);
+        }
+        for (const std::string_view ROOT : GLOVE_ATTR_ROOTS) {
+            readAttributesAt(*pawn, ROOT, paint);
+            if (paint.paint != 0 || paint.has_wear) {
+                break;
+            }
+        }
+        if (paint.paint == 0 && paint.seed == 0 && !paint.has_wear) {
+            readAttributes(*pawn, paint);
+        }
         item.paint_index = paint.paint;
         item.paint_seed = paint.seed;
         if (paint.has_wear) {
             item.paint_wear = paint.wear;
             item.has_wear = true;
         }
+        item.kill_eater_value = paint.stat_trak;
+        item.item_id = itemIdAt(*pawn, "m_EconGloves.");
+        if (item.item_id == 0) {
+            item.item_id = itemIdOf(*pawn);
+        }
+        if (const auto* quality = pawn->prop(gloveProp(QUALITY)); quality != nullptr) {
+            item.quality = static_cast<std::uint32_t>(quality->asU64());
+        } else if (const auto* quality = pawn->prop(QUALITY); quality != nullptr) {
+            item.quality = static_cast<std::uint32_t>(quality->asU64());
+        }
+        if (item.quality == QUALITY_STRANGE && item.kill_eater_value < 0) {
+            item.kill_eater_value = 0;
+        }
         item.item_name = csdata::itemName(item.def_index);
+
+        // Prefer the loadout side stamped on the glove view when present; else
+        // the owner's current team so both halves accumulate in the merge.
         int team = 0;
-        if (const auto TEAM_ITER = maps.steam_team.find(STEAM_ITER->second);
-            TEAM_ITER != maps.steam_team.end()) {
-            team = TEAM_ITER->second;
+        if (const auto* orig_team = pawn->prop(gloveProp(ORIG_TEAM)); orig_team != nullptr) {
+            const auto SIDE = static_cast<int>(orig_team->asU64());
+            if (SIDE == TEAM_T || SIDE == TEAM_CT) {
+                team = SIDE;
+            }
+        }
+        if (team == 0) {
+            if (const auto* pawn_team = pawn->prop(TEAM_NUM); pawn_team != nullptr) {
+                const auto SIDE = static_cast<int>(pawn_team->asU64());
+                if (SIDE == TEAM_T || SIDE == TEAM_CT) {
+                    team = SIDE;
+                }
+            }
+        }
+        if (team == 0) {
+            if (const auto TEAM_ITER = maps.steam_team.find(STEAM_ITER->second);
+                TEAM_ITER != maps.steam_team.end()) {
+                team = TEAM_ITER->second;
+            }
         }
         pushUnique(out, seen, STEAM_ITER->second, std::move(item), team);
     }

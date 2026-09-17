@@ -24,6 +24,9 @@ struct ObservedSkin {
 /// m_iOriginalTeamNumber when set (per-side loadout), else the owner's current
 /// team — so different T/CT knives stay distinct and the same item_id on both
 /// halves collapses to team=0 in the listener merge.
+///
+/// Gloves are read from CCSPlayerPawn.m_EconGloves (not the pawn root item def,
+/// which is often the agent). Same item_id seen on both halves → team=0.
 class SkinSampler {
   public:
     /// Collect unique (steam, def, paint, seed) rows visible at this tick.

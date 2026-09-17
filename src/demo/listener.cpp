@@ -20,6 +20,11 @@ inline constexpr std::uint32_t DEFAULT_KNIFE_T = 59;
 inline constexpr std::uint32_t MIN_SPECIALTY_KNIFE = 500;
 /// Knives sit in 500..999; paid agents start ~4600, gloves at 5027.
 inline constexpr std::uint32_t MAX_SPECIALTY_KNIFE = 999;
+inline constexpr std::uint32_t DEFAULT_T_GLOVES = 5028;
+inline constexpr std::uint32_t DEFAULT_CT_GLOVES = 5029;
+inline constexpr std::uint32_t MIN_GLOVE_DEF = 5027;
+inline constexpr std::uint32_t MAX_GLOVE_DEF = 5035;
+inline constexpr std::uint32_t BROKEN_FANG_GLOVES = 4725;
 inline constexpr std::uint8_t SIDE_BIT_T = 1U;
 inline constexpr std::uint8_t SIDE_BIT_CT = 2U;
 inline constexpr std::uint8_t SIDE_BITS_BOTH = SIDE_BIT_T | SIDE_BIT_CT;
@@ -30,6 +35,17 @@ inline constexpr std::uint8_t SIDE_BITS_BOTH = SIDE_BIT_T | SIDE_BIT_CT;
 
 [[nodiscard]] bool isSpecialtyKnifeDef(std::uint32_t def) noexcept {
     return def >= MIN_SPECIALTY_KNIFE && def <= MAX_SPECIALTY_KNIFE;
+}
+
+[[nodiscard]] bool isDefaultGloveDef(std::uint32_t def) noexcept {
+    return def == DEFAULT_T_GLOVES || def == DEFAULT_CT_GLOVES;
+}
+
+[[nodiscard]] bool isPaidGloveDef(std::uint32_t def) noexcept {
+    if (def == BROKEN_FANG_GLOVES) {
+        return true;
+    }
+    return def >= MIN_GLOVE_DEF && def <= MAX_GLOVE_DEF && !isDefaultGloveDef(def);
 }
 
 [[nodiscard]] std::uint8_t sideBit(int team) noexcept {
@@ -60,6 +76,21 @@ void stripDefaultKnifeDefs(RawPlayer& player) {
     std::erase_if(player.loadout, [](const LoadoutItem& item) {
         return isDefaultKnifeDef(item.def_index);
     });
+}
+
+void stripDefaultGloveDefs(RawPlayer& player) {
+    std::erase_if(player.loadout, [](const LoadoutItem& item) {
+        return isDefaultGloveDef(item.def_index);
+    });
+}
+
+void stripDefaultsFor(RawPlayer& player, const LoadoutItem& incoming) {
+    if (isSpecialtyKnifeDef(incoming.def_index)) {
+        stripDefaultKnifeDefs(player);
+    }
+    if (isPaidGloveDef(incoming.def_index)) {
+        stripDefaultGloveDefs(player);
+    }
 }
 
 void mergeLoadoutItems(RawPlayer& player,
@@ -105,9 +136,7 @@ void mergeLoadoutItems(RawPlayer& player,
                 item_sides[added.item_id] |= BIT;
                 added.team = teamFromSideMask(item_sides[added.item_id]);
             }
-            if (isSpecialtyKnifeDef(added.def_index)) {
-                stripDefaultKnifeDefs(player);
-            }
+            stripDefaultsFor(player, added);
             continue;
         }
         if (incoming.item_id != 0 && existing->item_id == 0) {
@@ -170,9 +199,7 @@ void mergeLoadoutItems(RawPlayer& player,
         if (incoming.music_index != 0) {
             existing->music_index = incoming.music_index;
         }
-        if (isSpecialtyKnifeDef(existing->def_index)) {
-            stripDefaultKnifeDefs(player);
-        }
+        stripDefaultsFor(player, *existing);
     }
 }
 
