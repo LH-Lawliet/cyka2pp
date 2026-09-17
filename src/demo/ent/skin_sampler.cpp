@@ -26,7 +26,10 @@ inline constexpr std::uint32_t MAX_GUN_DEF_INDEX = 100;
 inline constexpr std::uint32_t MIN_SPECIALTY_DEF_INDEX = 500;
 inline constexpr std::uint32_t MIN_CUSTOM_AGENT_DEF = 1000;
 inline constexpr std::uint32_t MIN_GLOVE_DEF_INDEX = 5027;
-inline constexpr std::uint32_t MAX_GLOVE_DEF_INDEX = 6000;
+inline constexpr std::uint32_t MAX_GLOVE_DEF_INDEX = 5035;
+inline constexpr std::uint32_t BROKEN_FANG_GLOVE_DEF = 4725;
+inline constexpr std::uint32_t DEFAULT_T_AGENT_DEF = 5036;
+inline constexpr std::uint32_t DEFAULT_CT_AGENT_DEF = 5037;
 inline constexpr std::uint32_t MAX_REASONABLE_PAINT = 100000;
 inline constexpr float WEAR_MAX_INCLUSIVE = 1.1F;
 inline constexpr float ATTR_U32_MAX_F = 4.0e9F;
@@ -66,6 +69,11 @@ const std::string QUALITY = "m_iEntityQuality";
     }
     return name.contains("Weapon") || name.contains("AK") || name.contains("DEagle") ||
            name.contains("Knife");
+}
+
+[[nodiscard]] bool isGloveDef(std::uint32_t def) {
+    return def == BROKEN_FANG_GLOVE_DEF ||
+           (def >= MIN_GLOVE_DEF_INDEX && def <= MAX_GLOVE_DEF_INDEX);
 }
 
 [[nodiscard]] bool isSkinWorthyDef(std::uint32_t def) {
@@ -318,8 +326,9 @@ void collectAgents(const EntityContext& ctx,
             continue;
         }
         const auto DEF = static_cast<std::uint32_t>(agent->asU64());
-        // Map-default / empty agents are tiny ids; custom agents are 5000+.
-        if (DEF < MIN_CUSTOM_AGENT_DEF) {
+        // Map-default agents are 5036/5037; paid agents are typically 4600+.
+        if (DEF != DEFAULT_T_AGENT_DEF && DEF != DEFAULT_CT_AGENT_DEF &&
+            DEF < MIN_CUSTOM_AGENT_DEF) {
             continue;
         }
         LoadoutItem item;
@@ -350,8 +359,8 @@ void collectGlovesFromPawns(const EntityContext& ctx,
         if (const auto* def = pawn->prop(ITEM_DEF); def != nullptr) {
             item.def_index = static_cast<std::uint32_t>(def->asU64());
         }
-        // Glove defs are 5027+; pawn item def may also be agent — skip non-gloves.
-        if (item.def_index < MIN_GLOVE_DEF_INDEX || item.def_index > MAX_GLOVE_DEF_INDEX) {
+        // Glove defs only — pawn item def may also be an agent.
+        if (!isGloveDef(item.def_index)) {
             continue;
         }
         WeaponPaint paint;

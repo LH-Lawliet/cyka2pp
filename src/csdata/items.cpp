@@ -70,13 +70,17 @@ const std::unordered_map<std::uint32_t, const char*> ITEM_NAMES{
     {5028, "Default T Gloves"  },
     {5029, "Default CT Gloves" },
     // Gloves (common)
-    {5027, "Broken Fang Gloves"},
+    {4725, "Broken Fang Gloves"},
+    {5027, "Bloodhound Gloves" },
     {5030, "Sport Gloves"      },
     {5031, "Driver Gloves"     },
     {5032, "Hand Wraps"        },
     {5033, "Moto Gloves"       },
     {5034, "Specialist Gloves" },
     {5035, "Hydra Gloves"      },
+    // Map-default agents (flexible loadout baseitems)
+    {5036, "Default T Agent"   },
+    {5037, "Default CT Agent"  },
 };
 
 } // namespace
