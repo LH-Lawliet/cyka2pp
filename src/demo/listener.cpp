@@ -27,12 +27,9 @@ inline constexpr std::uint32_t MAX_SPECIALTY_KNIFE = 599;
 }
 
 void stripDefaultKnifeDefs(RawPlayer& player) {
-    player.loadout.erase(std::remove_if(player.loadout.begin(),
-                                        player.loadout.end(),
-                                        [](const LoadoutItem& item) {
-                                            return isDefaultKnifeDef(item.def_index);
-                                        }),
-                         player.loadout.end());
+    std::erase_if(player.loadout, [](const LoadoutItem& item) {
+        return isDefaultKnifeDef(item.def_index);
+    });
 }
 
 void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
