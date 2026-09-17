@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -21,6 +22,10 @@ inline constexpr int MAX_ATTRS = 24;
 inline constexpr std::uint32_t ATTR_PAINT_KIT = 6;
 inline constexpr std::uint32_t ATTR_PAINT_SEED = 7;
 inline constexpr std::uint32_t ATTR_PAINT_WEAR = 8;
+inline constexpr std::uint32_t ATTR_KILL_EATER = 80;
+inline constexpr std::uint32_t ATTR_KILL_EATER_SCORE_TYPE = 81;
+/// Econ quality Strange — StatTrak™ weapons (and Strange gloves, etc.).
+inline constexpr std::uint32_t QUALITY_STRANGE = 9;
 inline constexpr std::uint32_t INVALID_DEF_INDEX = 0xFFFFU;
 inline constexpr std::uint32_t MAX_GUN_DEF_INDEX = 100;
 inline constexpr std::uint32_t MIN_SPECIALTY_DEF_INDEX = 500;
@@ -132,6 +137,38 @@ const std::string QUALITY = "m_iEntityQuality";
     return static_cast<std::uint32_t>(value.asU64());
 }
 
+/// Kill-eater counters are integer attrs; when networked as float they may be
+/// either a clean numeric float or a uint32 bit-pattern.
+[[nodiscard]] int rawKillEaterAsInt(const EntValue& value) {
+    if (value.kind == ValKind::FLOAT) {
+        const float AS_FLOAT = value.asF32();
+        if (AS_FLOAT >= 0.F && AS_FLOAT < ATTR_U32_MAX_F &&
+            AS_FLOAT == static_cast<float>(static_cast<std::uint32_t>(AS_FLOAT))) {
+            return static_cast<int>(AS_FLOAT);
+        }
+        std::uint32_t bits = 0;
+        static_assert(sizeof(float) == sizeof(std::uint32_t));
+        std::memcpy(&bits, &AS_FLOAT, sizeof(bits));
+        if (bits > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
+            return -1;
+        }
+        return static_cast<int>(bits);
+    }
+    const auto RAW = value.asU64();
+    // Same convention as m_nFallbackStatTrak: -1 means "not StatTrak".
+    if (RAW > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())) {
+        return -1;
+    }
+    return static_cast<int>(RAW);
+}
+
+[[nodiscard]] const EntValue* attrRawValue(const Entity& weapon, int attr_idx) {
+    if (const auto* raw = weapon.prop(attrPath(attr_idx, "m_iRawValue32")); raw != nullptr) {
+        return raw;
+    }
+    return weapon.prop(attrPath(attr_idx, "m_flValue"));
+}
+
 struct WeaponPaint {
     std::uint32_t paint{0};
     std::uint32_t seed{0};
@@ -143,13 +180,20 @@ struct WeaponPaint {
 void readAttributes(const Entity& weapon, WeaponPaint& paint) {
     for (int attr_idx = 0; attr_idx < MAX_ATTRS; ++attr_idx) {
         const auto DEF_PATH = attrPath(attr_idx, "m_iAttributeDefinitionIndex");
-        const auto RAW_PATH = attrPath(attr_idx, "m_iRawValue32");
         const auto* def_val = weapon.prop(DEF_PATH);
-        const auto* raw_val = weapon.prop(RAW_PATH);
-        if (def_val == nullptr || raw_val == nullptr) {
+        if (def_val == nullptr) {
             continue;
         }
         const auto DEF = static_cast<std::uint32_t>(def_val->asU64());
+        // Score-type alone is enough to mark StatTrak™ (counter may be absent).
+        if (DEF == ATTR_KILL_EATER_SCORE_TYPE && paint.stat_trak < 0) {
+            paint.stat_trak = 0;
+            continue;
+        }
+        const auto* raw_val = attrRawValue(weapon, attr_idx);
+        if (raw_val == nullptr) {
+            continue;
+        }
         if (DEF == ATTR_PAINT_KIT && paint.paint == 0) {
             paint.paint = rawAttrAsU32(*raw_val);
         } else if (DEF == ATTR_PAINT_SEED && paint.seed == 0) {
@@ -157,10 +201,15 @@ void readAttributes(const Entity& weapon, WeaponPaint& paint) {
         } else if (DEF == ATTR_PAINT_WEAR && !paint.has_wear) {
             paint.wear = rawAttrAsFloat(*raw_val);
             paint.has_wear = paint.wear > 0.F && paint.wear < WEAR_MAX_INCLUSIVE;
+        } else if (DEF == ATTR_KILL_EATER && paint.stat_trak < 0) {
+            const int COUNT = rawKillEaterAsInt(*raw_val);
+            if (COUNT >= 0) {
+                paint.stat_trak = COUNT;
+            }
         }
     }
     if (paint.paint == 0) {
-        if (const auto* raw = weapon.prop(attrPath(0, "m_iRawValue32")); raw != nullptr) {
+        if (const auto* raw = attrRawValue(weapon, 0); raw != nullptr) {
             const auto CANDIDATE = rawAttrAsU32(*raw);
             if (CANDIDATE > 0 && CANDIDATE < MAX_REASONABLE_PAINT) {
                 paint.paint = CANDIDATE;
@@ -183,9 +232,23 @@ void readFallback(const Entity& weapon, WeaponPaint& paint) {
     }
     if (const auto* stat_val = weapon.prop(FALLBACK_STAT);
         stat_val != nullptr && paint.stat_trak < 0) {
-        const auto STAT = static_cast<int>(stat_val->asI64());
-        if (STAT >= 0) {
-            paint.stat_trak = STAT;
+        // Prefer signed read: default non-ST is -1 (0xFFFFFFFF as uint).
+        int stat = -1;
+        if (stat_val->kind == ValKind::INT) {
+            stat = static_cast<int>(stat_val->asI64());
+        } else if (stat_val->kind == ValKind::UINT) {
+            const auto RAW = stat_val->asU64();
+            if (RAW <= static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())) {
+                stat = static_cast<int>(RAW);
+            }
+        } else {
+            const auto STAT = static_cast<int>(stat_val->asI64());
+            if (STAT >= 0) {
+                stat = STAT;
+            }
+        }
+        if (stat >= 0) {
+            paint.stat_trak = stat;
         }
     }
 }
@@ -228,6 +291,10 @@ void readFallback(const Entity& weapon, WeaponPaint& paint) {
     item.item_id = itemIdOf(weapon);
     if (const auto* quality = weapon.prop(QUALITY); quality != nullptr) {
         item.quality = static_cast<std::uint32_t>(quality->asU64());
+    }
+    // Strange quality ⇒ StatTrak™ even when the kill counter was never networked.
+    if (item.quality == QUALITY_STRANGE && item.kill_eater_value < 0) {
+        item.kill_eater_value = 0;
     }
     if (const auto* name = weapon.prop(CUSTOM_NAME);
         name != nullptr && name->kind == ValKind::STR && !name->s.empty()) {

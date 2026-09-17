@@ -234,6 +234,11 @@ LoadoutItem parseEconItemPreview(std::span<const std::uint8_t> msg) {
             break;
         }
     }
+    // Strange quality ⇒ StatTrak™ even when kill_eater_value was omitted.
+    constexpr std::uint32_t QUALITY_STRANGE = 9;
+    if (item.quality == QUALITY_STRANGE && item.kill_eater_value < 0) {
+        item.kill_eater_value = 0;
+    }
     enrichItemName(item);
     return item;
 }
