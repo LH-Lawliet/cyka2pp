@@ -88,9 +88,41 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f | sort
 
+      # Create/update the release metadata first (no assets). softprops uploads
+      # all files concurrently by default; GitHub's upload API intermittently
+      # returns HTML unicorn 5xx under that parallel load — one tiny .sha256 can
+      # succeed while a binary fails in the same batch.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: artifacts/*
           generate_release_notes: true
-          fail_on_unmatched_files: true
+
+      - name: Upload release assets (sequential + retry)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          mapfile -d '' files < <(find artifacts -type f -print0 | sort -z)
+          if ((${#files[@]} == 0)); then
+            echo "no artifacts to upload" >&2
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            name=$(basename "$f")
+            echo "Uploading ${name}..."
+            ok=0
+            for attempt in 1 2 3 4 5 6 7 8; do
+              if gh release upload "$tag" "$f" --clobber; then
+                ok=1
+                break
+              fi
+              sleep=$((attempt * 15))
+              echo "upload failed (attempt ${attempt}/8), retry in ${sleep}s..."
+              sleep "$sleep"
+            done
+            if [[ "$ok" -ne 1 ]]; then
+              echo "failed to upload ${name} after retries" >&2
+              exit 1
+            fi
+          done
