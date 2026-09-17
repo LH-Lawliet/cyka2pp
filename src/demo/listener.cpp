@@ -12,10 +12,36 @@ namespace cyka::demo {
 namespace {
 
 inline constexpr double MS_PER_SEC = 1000.0;
+inline constexpr std::uint32_t DEFAULT_KNIFE_GG = 41;
+inline constexpr std::uint32_t DEFAULT_KNIFE_CT = 42;
+inline constexpr std::uint32_t DEFAULT_KNIFE_T = 59;
+inline constexpr std::uint32_t MIN_SPECIALTY_KNIFE = 500;
+inline constexpr std::uint32_t MAX_SPECIALTY_KNIFE = 599;
+
+[[nodiscard]] bool isDefaultKnifeDef(std::uint32_t def) noexcept {
+    return def == DEFAULT_KNIFE_GG || def == DEFAULT_KNIFE_CT || def == DEFAULT_KNIFE_T;
+}
+
+[[nodiscard]] bool isSpecialtyKnifeDef(std::uint32_t def) noexcept {
+    return def >= MIN_SPECIALTY_KNIFE && def <= MAX_SPECIALTY_KNIFE;
+}
+
+void stripDefaultKnifeDefs(RawPlayer& player) {
+    player.loadout.erase(std::remove_if(player.loadout.begin(),
+                                        player.loadout.end(),
+                                        [](const LoadoutItem& item) {
+                                            return isDefaultKnifeDef(item.def_index);
+                                        }),
+                         player.loadout.end());
+}
 
 void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
     for (auto& incoming : items) {
         if (incoming.def_index == 0 && incoming.item_id == 0) {
+            continue;
+        }
+        // Stock knife defs are never real loadout skins (GOTV paint-bleed).
+        if (isDefaultKnifeDef(incoming.def_index)) {
             continue;
         }
         LoadoutItem* existing = nullptr;
@@ -44,6 +70,10 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
         }
         if (existing == nullptr) {
             player.loadout.push_back(std::move(incoming));
+            // Specialty knife arrived — drop any stock knife bleed rows.
+            if (isSpecialtyKnifeDef(player.loadout.back().def_index)) {
+                stripDefaultKnifeDefs(player);
+            }
             continue;
         }
         if (incoming.item_id != 0 && existing->item_id == 0) {
@@ -93,6 +123,9 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
         }
         if (incoming.music_index != 0) {
             existing->music_index = incoming.music_index;
+        }
+        if (isSpecialtyKnifeDef(existing->def_index)) {
+            stripDefaultKnifeDefs(player);
         }
     }
 }

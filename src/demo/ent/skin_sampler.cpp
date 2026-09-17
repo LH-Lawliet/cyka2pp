@@ -35,6 +35,9 @@ inline constexpr std::uint32_t MAX_GLOVE_DEF_INDEX = 5035;
 inline constexpr std::uint32_t BROKEN_FANG_GLOVE_DEF = 4725;
 inline constexpr std::uint32_t DEFAULT_T_AGENT_DEF = 5036;
 inline constexpr std::uint32_t DEFAULT_CT_AGENT_DEF = 5037;
+inline constexpr std::uint32_t DEFAULT_KNIFE_CT = 42;
+inline constexpr std::uint32_t DEFAULT_KNIFE_T = 59;
+inline constexpr std::uint32_t DEFAULT_KNIFE_GG = 41;
 inline constexpr std::uint32_t MAX_REASONABLE_PAINT = 100000;
 inline constexpr float WEAR_MAX_INCLUSIVE = 1.1F;
 inline constexpr float ATTR_U32_MAX_F = 4.0e9F;
@@ -93,6 +96,13 @@ const std::string QUALITY = "m_iEntityQuality";
     }
     // Guns / default knives, specialty knives, gloves / agents.
     return def < MAX_GUN_DEF_INDEX || def >= MIN_SPECIALTY_DEF_INDEX;
+}
+
+/// Stock knife defs (41/42/59) are never marketplace-skinned in CS2. GOTV often
+/// copies a specialty knife's FallbackPaint* onto every player's default knife
+/// entity — treat those as noise.
+[[nodiscard]] bool isDefaultKnifeDef(std::uint32_t def) {
+    return def == DEFAULT_KNIFE_CT || def == DEFAULT_KNIFE_T || def == DEFAULT_KNIFE_GG;
 }
 
 [[nodiscard]] std::string paddedAttrIndex(int index) {
@@ -338,6 +348,10 @@ void pushUnique(std::vector<ObservedSkin>& out,
                 LoadoutItem item,
                 int team) {
     if (steam == 0 || item.def_index == 0 || !isSkinWorthyDef(item.def_index)) {
+        return;
+    }
+    // Ignore stock knife entities entirely (bare or paint-bleed from specialty).
+    if (isDefaultKnifeDef(item.def_index)) {
         return;
     }
     if (team == TEAM_T || team == TEAM_CT) {
