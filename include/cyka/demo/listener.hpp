@@ -7,6 +7,7 @@
 #include "cyka/types.hpp"
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -161,6 +162,8 @@ class CollectingListener {
     UserInfoById users;
     std::unordered_map<std::int32_t, SteamId> steam_by_userid;
     std::unordered_map<SteamId, std::string> team_of; // steam → A|B
+    /// item_id → T/CT sighting mask (bit0=T, bit1=CT) for loadout team resolve.
+    std::unordered_map<std::uint64_t, std::uint8_t> loadout_item_sides;
     /// CS team 2(T)/3(CT) → letter; swaps on side switch heuristic.
     std::array<std::string, SIDE_LETTER_SIZE> side_letter{"", "", "B", "A"}; // index by team#
     int round_number{0};

@@ -58,6 +58,7 @@ const std::string FALLBACK_WEAR = "m_flFallbackWear";
 const std::string FALLBACK_STAT = "m_nFallbackStatTrak";
 const std::string OWNER_LOW = "m_OriginalOwnerXuidLow";
 const std::string OWNER_HIGH = "m_OriginalOwnerXuidHigh";
+const std::string ORIG_TEAM = "m_iOriginalTeamNumber";
 const std::string CUSTOM_NAME = "m_szCustomName";
 const std::string ITEM_ID_HIGH = "m_iItemIDHigh";
 const std::string ITEM_ID_LOW = "m_iItemIDLow";
@@ -354,13 +355,15 @@ void pushUnique(std::vector<ObservedSkin>& out,
     if (isDefaultKnifeDef(item.def_index)) {
         return;
     }
+    // Keep T/CT as observed — players can equip different knives/gloves per side.
+    // Same item_id seen on both halves is collapsed to team=0 in mergeLoadoutItems.
     if (team == TEAM_T || team == TEAM_CT) {
         item.team = team;
     }
     std::string key =
         std::to_string(steam) + ':' + std::to_string(item.def_index) + ':' +
         std::to_string(item.paint_index) + ':' + std::to_string(item.paint_seed) + ':' +
-        std::to_string(team);
+        std::to_string(item.team);
     if (!seen.insert(std::move(key)).second) {
         return;
     }
@@ -383,9 +386,19 @@ void collectFromWeaponEntity(const OwnerMaps& maps,
     if (item.def_index == 0) {
         return;
     }
+    // Prefer the weapon's loadout side (m_iOriginalTeamNumber): same knife def can
+    // exist once per team with different paints, or the same item_id on both.
     int team = 0;
-    if (const auto ITER = maps.steam_team.find(STEAM); ITER != maps.steam_team.end()) {
-        team = ITER->second;
+    if (const auto* orig_team = weapon.prop(ORIG_TEAM); orig_team != nullptr) {
+        const auto SIDE = static_cast<int>(orig_team->asU64());
+        if (SIDE == TEAM_T || SIDE == TEAM_CT) {
+            team = SIDE;
+        }
+    }
+    if (team == 0) {
+        if (const auto ITER = maps.steam_team.find(STEAM); ITER != maps.steam_team.end()) {
+            team = ITER->second;
+        }
     }
     pushUnique(out, seen, STEAM, std::move(item), team);
 }

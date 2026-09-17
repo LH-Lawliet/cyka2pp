@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 namespace cyka::demo {
@@ -16,7 +18,11 @@ inline constexpr std::uint32_t DEFAULT_KNIFE_GG = 41;
 inline constexpr std::uint32_t DEFAULT_KNIFE_CT = 42;
 inline constexpr std::uint32_t DEFAULT_KNIFE_T = 59;
 inline constexpr std::uint32_t MIN_SPECIALTY_KNIFE = 500;
-inline constexpr std::uint32_t MAX_SPECIALTY_KNIFE = 599;
+/// Knives sit in 500..999; paid agents start ~4600, gloves at 5027.
+inline constexpr std::uint32_t MAX_SPECIALTY_KNIFE = 999;
+inline constexpr std::uint8_t SIDE_BIT_T = 1U;
+inline constexpr std::uint8_t SIDE_BIT_CT = 2U;
+inline constexpr std::uint8_t SIDE_BITS_BOTH = SIDE_BIT_T | SIDE_BIT_CT;
 
 [[nodiscard]] bool isDefaultKnifeDef(std::uint32_t def) noexcept {
     return def == DEFAULT_KNIFE_GG || def == DEFAULT_KNIFE_CT || def == DEFAULT_KNIFE_T;
@@ -26,13 +32,39 @@ inline constexpr std::uint32_t MAX_SPECIALTY_KNIFE = 599;
     return def >= MIN_SPECIALTY_KNIFE && def <= MAX_SPECIALTY_KNIFE;
 }
 
+[[nodiscard]] std::uint8_t sideBit(int team) noexcept {
+    if (team == TEAM_T) {
+        return SIDE_BIT_T;
+    }
+    if (team == TEAM_CT) {
+        return SIDE_BIT_CT;
+    }
+    return 0;
+}
+
+/// Resolve display team from accumulated T/CT sightings of one econ item_id.
+[[nodiscard]] int teamFromSideMask(std::uint8_t mask) noexcept {
+    if (mask == SIDE_BITS_BOTH) {
+        return 0;
+    }
+    if (mask == SIDE_BIT_T) {
+        return TEAM_T;
+    }
+    if (mask == SIDE_BIT_CT) {
+        return TEAM_CT;
+    }
+    return 0;
+}
+
 void stripDefaultKnifeDefs(RawPlayer& player) {
     std::erase_if(player.loadout, [](const LoadoutItem& item) {
         return isDefaultKnifeDef(item.def_index);
     });
 }
 
-void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
+void mergeLoadoutItems(RawPlayer& player,
+                       std::vector<LoadoutItem> items,
+                       std::unordered_map<std::uint64_t, std::uint8_t>& item_sides) {
     for (auto& incoming : items) {
         if (incoming.def_index == 0 && incoming.item_id == 0) {
             continue;
@@ -57,8 +89,9 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
                     have.paint_seed != incoming.paint_seed) {
                     continue;
                 }
-                // Keep T and CT rows separate when both sides are known.
-                if (have.team != 0 && incoming.team != 0 && have.team != incoming.team) {
+                // Distinct econ instances (different knives per side) stay separate.
+                if (have.item_id != 0 && incoming.item_id != 0 &&
+                    have.item_id != incoming.item_id) {
                     continue;
                 }
                 existing = &have;
@@ -67,8 +100,12 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
         }
         if (existing == nullptr) {
             player.loadout.push_back(std::move(incoming));
-            // Specialty knife arrived — drop any stock knife bleed rows.
-            if (isSpecialtyKnifeDef(player.loadout.back().def_index)) {
+            LoadoutItem& added = player.loadout.back();
+            if (const std::uint8_t BIT = sideBit(added.team); BIT != 0 && added.item_id != 0) {
+                item_sides[added.item_id] |= BIT;
+                added.team = teamFromSideMask(item_sides[added.item_id]);
+            }
+            if (isSpecialtyKnifeDef(added.def_index)) {
                 stripDefaultKnifeDefs(player);
             }
             continue;
@@ -101,8 +138,20 @@ void mergeLoadoutItems(RawPlayer& player, std::vector<LoadoutItem> items) {
         if (!incoming.keychains.empty()) {
             existing->keychains = std::move(incoming.keychains);
         }
-        // Same econ item seen on both sides → shared (show under T and CT).
-        if (incoming.team != 0) {
+        // Accumulate T/CT sightings per item_id (m_iOriginalTeamNumber /
+        // SendPlayerLoadout). Same knife both halves → team=0; one half → that
+        // team. Different knives stay separate rows (different item_id).
+        if (existing->item_id != 0) {
+            if (const std::uint8_t BIT = sideBit(incoming.team); BIT != 0) {
+                item_sides[existing->item_id] |= BIT;
+            }
+            if (const std::uint8_t BIT = sideBit(existing->team); BIT != 0) {
+                item_sides[existing->item_id] |= BIT;
+            }
+            if (const auto ITER = item_sides.find(existing->item_id); ITER != item_sides.end()) {
+                existing->team = teamFromSideMask(ITER->second);
+            }
+        } else if (incoming.team != 0) {
             if (existing->team == 0) {
                 existing->team = incoming.team;
             } else if (existing->team != incoming.team) {
@@ -279,7 +328,7 @@ void CollectingListener::applyLoadoutItems(const SteamId& steam, std::vector<Loa
     }
     ensurePlayer(steam, {}, 0);
     if (auto* player = findPlayer(steam)) {
-        mergeLoadoutItems(*player, std::move(items));
+        mergeLoadoutItems(*player, std::move(items), loadout_item_sides);
     }
 }
 
