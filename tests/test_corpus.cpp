@@ -143,6 +143,47 @@ void test_corpus() {
             }
             CYKA_CHECK(found_reason);
         }
+        if (demo_entry.contains("expectWinnerNameContains")) {
+            const std::string WANT = demo_entry["expectWinnerNameContains"].get<std::string>();
+            bool found = false;
+            for (const auto& [_steam_id, player] : match.players) {
+                if (!player.name.contains(WANT)) {
+                    continue;
+                }
+                if (match.winner && !match.winner->letter.empty()) {
+                    CYKA_CHECK(player.team == match.winner->letter);
+                }
+                found = true;
+                break;
+            }
+            CYKA_CHECK(found);
+        }
+        if (demo_entry.contains("expectUniqueLoadoutPaint")) {
+            const auto& paint_spec = demo_entry["expectUniqueLoadoutPaint"];
+            const auto WANT_PAINT = paint_spec["paintIndex"].get<std::uint32_t>();
+            const auto WANT_SEED = paint_spec["paintSeed"].get<std::uint32_t>();
+            const std::string OWNER_SUB = paint_spec.value("ownerNameContains", "");
+            int owners = 0;
+            bool owner_ok = OWNER_SUB.empty();
+            for (const auto& [_steam_id, player] : match.players) {
+                bool has = false;
+                for (const auto& item : player.loadout_items) {
+                    if (item.paint_index == WANT_PAINT && item.paint_seed == WANT_SEED) {
+                        has = true;
+                        break;
+                    }
+                }
+                if (!has) {
+                    continue;
+                }
+                ++owners;
+                if (!OWNER_SUB.empty() && player.name.contains(OWNER_SUB)) {
+                    owner_ok = true;
+                }
+            }
+            CYKA_CHECK(owners == 1);
+            CYKA_CHECK(owner_ok);
+        }
 
         std::unordered_map<cyka::SteamId, std::string> team_of;
         for (const auto& [steam_id, player] : match.players) {

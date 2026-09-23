@@ -206,6 +206,39 @@
       "urls": [
         "https://cdn.hugorustenholz.fr/3841625442696036619.dem"
       ]
+    },
+    {
+      "id": "loadout-no-pickup-ak-anubis",
+      "file": "3844031545652282201.dem",
+      "kind": "loadout",
+      "why": "Polpette (and others) briefly held Un Monde Parfait's AK-47; EndOfMatch must not credit that paint to pickups. Only UMP keeps paintIndex 1171 / seed 20 / itemId 49247848972.",
+      "map": "de_anubis",
+      "scoreA": 4,
+      "scoreB": 13,
+      "rounds": 17,
+      "expectUniqueLoadoutPaint": {
+        "paintIndex": 1171,
+        "paintSeed": 20,
+        "ownerNameContains": "Monde Parfait"
+      },
+      "urls": [
+        "https://cdn.hugorustenholz.fr/3844031545652282201.dem"
+      ]
+    },
+    {
+      "id": "premier-ot-dust2-polpette-16-12",
+      "file": "3844212634358383124.dem",
+      "kind": "premier",
+      "rankType": 11,
+      "why": "Premier OT Dust2. Polpette's team wins 16-12; side_letter vs first-write team_of desynced OT winners to the other letter (12-16) before letterForTeamNum.",
+      "map": "de_dust2",
+      "scoreA": 16,
+      "scoreB": 12,
+      "rounds": 28,
+      "expectWinnerNameContains": "Polpette",
+      "urls": [
+        "https://cdn.hugorustenholz.fr/3844212634358383124.dem"
+      ]
     }
   ]
 }

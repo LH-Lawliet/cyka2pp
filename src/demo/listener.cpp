@@ -93,6 +93,11 @@ void stripDefaultsFor(RawPlayer& player, const LoadoutItem& incoming) {
     }
 }
 
+[[nodiscard]] std::string paintKey(const LoadoutItem& item) {
+    return std::to_string(item.def_index) + ':' + std::to_string(item.paint_index) + ':' +
+           std::to_string(item.paint_seed);
+}
+
 void mergeLoadoutItems(RawPlayer& player,
                        std::vector<LoadoutItem> items,
                        std::unordered_map<std::uint64_t, std::uint8_t>& item_sides) {
@@ -309,9 +314,30 @@ void CollectingListener::noteTeam(const SteamId& steam, int team) {
     if (steam.empty() || team < TEAM_T || team > TEAM_CT) {
         return;
     }
+    team_num_of[steam] = team;
+    // First assignment wins: side_letter flips on half-time so a later team_num
+    // still maps to the same scoreboard letter when noteTeam is refreshed.
     if (!team_of.contains(steam)) {
-        team_of[steam] = side_letter[team];
+        team_of[steam] = side_letter[static_cast<std::size_t>(team)];
     }
+}
+
+std::string CollectingListener::letterForTeamNum(int team) const {
+    if (team < TEAM_T || team > TEAM_CT) {
+        return {};
+    }
+    // Prefer a player currently on this side — their pinned letter is the
+    // scoreboard team. side_letter alone drifts from roster letters in OT when
+    // swaps and pawn team_num updates are a tick apart.
+    for (const auto& [steam, num] : team_num_of) {
+        if (num != team) {
+            continue;
+        }
+        if (const auto ITER = team_of.find(steam); ITER != team_of.end() && !ITER->second.empty()) {
+            return ITER->second;
+        }
+    }
+    return side_letter[static_cast<std::size_t>(team)];
 }
 
 void CollectingListener::noteMvpCount(const SteamId& steam, int mvp_count) {
@@ -354,8 +380,54 @@ void CollectingListener::applyLoadoutItems(const SteamId& steam, std::vector<Loa
         return;
     }
     ensurePlayer(steam, {}, 0);
+
+    // Drop EndOfMatch / slot loadout rows that are clearly someone else's econ
+    // item (pickups). Mid-match OriginalOwnerXuid scrape is authoritative; ghosts
+    // usually lack item_id but share def/paint/seed with the owner's row.
+    std::vector<LoadoutItem> kept;
+    kept.reserve(items.size());
+    for (auto& incoming : items) {
+        if (incoming.item_id != 0) {
+            if (const auto ITER = loadout_item_owner.find(incoming.item_id);
+                ITER != loadout_item_owner.end() && ITER->second != steam) {
+                continue;
+            }
+        } else if (incoming.paint_index != 0 || incoming.paint_seed != 0) {
+            if (const auto ITER = loadout_paint_owner.find(paintKey(incoming));
+                ITER != loadout_paint_owner.end() && ITER->second != steam) {
+                continue;
+            }
+        }
+        kept.push_back(std::move(incoming));
+    }
+    if (kept.empty()) {
+        return;
+    }
+
     if (auto* player = findPlayer(steam)) {
-        mergeLoadoutItems(*player, std::move(items), loadout_item_sides);
+        mergeLoadoutItems(*player, std::move(kept), loadout_item_sides);
+        // Register ownership and strip pickup clones from everyone else.
+        for (const auto& item : player->loadout) {
+            if (item.item_id == 0) {
+                continue;
+            }
+            loadout_item_owner[item.item_id] = steam;
+            if (item.paint_index != 0 || item.paint_seed != 0) {
+                loadout_paint_owner[paintKey(item)] = steam;
+            }
+            const std::string KEY = paintKey(item);
+            for (auto& other : raw().players) {
+                if (other.steam_id == steam) {
+                    continue;
+                }
+                std::erase_if(other.loadout, [&](const LoadoutItem& row) {
+                    if (row.item_id != 0 && row.item_id == item.item_id) {
+                        return true;
+                    }
+                    return row.item_id == 0 && paintKey(row) == KEY;
+                });
+            }
+        }
     }
 }
 

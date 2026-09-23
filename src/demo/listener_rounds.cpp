@@ -161,7 +161,7 @@ void CollectingListener::endRound(RoundEnd end) {
     pending.end_tick = end.tick;
     // Authoritative sources (round_end event / GameRules) always win over inference.
     if (end.winner_team >= TEAM_T && end.winner_team <= TEAM_CT) {
-        pending.winner_letter = side_letter[static_cast<std::size_t>(end.winner_team)];
+        pending.winner_letter = letterForTeamNum(end.winner_team);
     }
     if (!end.reason.empty()) {
         pending.reason = std::move(end.reason);
@@ -177,10 +177,10 @@ void CollectingListener::closeRoundInferred(Tick tick) {
     }
     if (pending.winner_letter.empty()) {
         if (bomb_state == "defused") {
-            pending.winner_letter = side_letter[static_cast<std::size_t>(TEAM_CT)];
+            pending.winner_letter = letterForTeamNum(TEAM_CT);
             pending.reason = "bomb_defused";
         } else if (bomb_state == "exploded") {
-            pending.winner_letter = side_letter[static_cast<std::size_t>(TEAM_T)];
+            pending.winner_letter = letterForTeamNum(TEAM_T);
             pending.reason = "bomb_exploded";
         } else {
             pending.reason = "elimination";

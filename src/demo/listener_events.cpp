@@ -122,7 +122,7 @@ void CollectingListener::onGameRules(const GameRulesSnapshot& snap) {
         endRound({.tick = snap.tick, .winner_team = winner, .reason = REASON});
     } else if (!raw().rounds.empty()) {
         auto& last = raw().rounds.back();
-        last.winner_letter = side_letter[static_cast<std::size_t>(winner)];
+        last.winner_letter = letterForTeamNum(winner);
         if (!REASON.empty()) {
             last.reason = REASON;
         }

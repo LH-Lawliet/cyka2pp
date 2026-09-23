@@ -125,8 +125,10 @@ class CollectingListener {
     /// Record game-event userid → steam. First writer wins so a later packed
     /// userinfo slot cannot steal a kicked / missing player's userid.
     void noteUserid(const SteamId& steam, int userid);
-    /// Pin steam → A|B from CS team 2/3 using the current side_letter_ map.
     void noteTeam(const SteamId& steam, int team);
+    /// Scoreboard letter for CS team 2/3: prefer a live player's pinned letter on
+    /// that side (stable across half-time), else side_letter_.
+    [[nodiscard]] std::string letterForTeamNum(int team) const;
     /// Keep the highest observed CCSPlayerController::m_iMVPs for this player.
     void noteMvpCount(const SteamId& steam, int mvp_count);
     /// Keep the latest non-zero competitive rank fields for this player.
@@ -162,6 +164,13 @@ class CollectingListener {
     UserInfoById users;
     std::unordered_map<std::int32_t, SteamId> steam_by_userid;
     std::unordered_map<SteamId, std::string> team_of; // steam → A|B
+    /// Latest CS team number (2/3) per steam — used to resolve round winners to
+    /// the scoreboard letter of whoever is actually on that side right now.
+    std::unordered_map<SteamId, int> team_num_of;
+    /// item_id → owning steam (rejects EndOfMatch pickup ghosts for other players).
+    std::unordered_map<std::uint64_t, SteamId> loadout_item_owner;
+    /// def:paint:seed → owning steam when that owner has a real item_id.
+    std::unordered_map<std::string, SteamId> loadout_paint_owner;
     /// item_id → T/CT sighting mask (bit0=T, bit1=CT) for loadout team resolve.
     std::unordered_map<std::uint64_t, std::uint8_t> loadout_item_sides;
     /// CS team 2(T)/3(CT) → letter; swaps on side switch heuristic.

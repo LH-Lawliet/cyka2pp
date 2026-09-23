@@ -350,6 +350,8 @@ python3 scripts/compare_analyzers.py --bin ./build/cyka2pp --maps-dir "$HOME/cs2
 | `world_damage`               | many kills with empty `killerSteamId` (bomb/world)                   |
 | `hostage`                    | `cs_office` non-defuse map                                           |
 | `premier` DNF                | Inferno 9–7 surrender mid-match (`3841625442696036619`)              |
+| `loadout` pickup             | Anubis — UMP AK paint not credited to pickups                        |
+| `premier` OT Polpette        | Dust2 16–12 — winner letter follows roster through OT swaps          |
 | `pro` (optional)             | HLTV Vitality vs Spirit Nuke — skipped if the external URL is down   |
 
 Valve CDN: `https://cdn.hugorustenholz.fr/<match_id>.dem`. Prem=11, Comp=12, Wingman=7.
