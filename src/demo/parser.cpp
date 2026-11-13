@@ -32,11 +32,6 @@ Result<RawMatch> parseDemo(const std::filesystem::path& path) {
             return static_cast<EntityBridge*>(ctx)->fillShotAim(steam, shot);
         },
         &entities);
-    listener.setHealthLookup(
-        [](void* ctx, const SteamId& steam) -> int {
-            return static_cast<EntityBridge*>(ctx)->healthOf(steam);
-        },
-        &entities);
 
     DemoStream stream(mapped->bytes());
     if (!stream.ok()) {

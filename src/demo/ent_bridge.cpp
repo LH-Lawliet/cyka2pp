@@ -136,23 +136,6 @@ bool EntityBridge::fillShotAim(const SteamId& steam, RawShot& shot) {
     return true;
 }
 
-int EntityBridge::healthOf(const SteamId& steam) {
-    if (steam.empty() || !ctx.ready()) {
-        return -1;
-    }
-    ent::PoseSample pose;
-    std::uint64_t sid = 0;
-    try {
-        sid = std::stoull(steam);
-    } catch (...) {
-        return -1;
-    }
-    if (!ent::PoseSampler::poseFor(ctx, sid, pose)) {
-        return -1;
-    }
-    return pose.health;
-}
-
 void EntityBridge::publishGameRules(Tick tick) {
     for (const ent::Entity* ent : ctx.tracked()) {
         if (ent == nullptr || ent->cls() == nullptr || ent->cls()->name != "CCSGameRulesProxy") {

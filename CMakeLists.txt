@@ -184,6 +184,7 @@ add_executable(cyka2pp-tests
     tests/test_steam_id.cpp
     tests/test_userid.cpp
     tests/test_ent_decode.cpp
+    tests/test_damage.cpp
     tests/test_spray.cpp
     tests/test_loadout.cpp
 )

@@ -76,30 +76,43 @@ void CollectingListener::onPlayerHurt(Tick tick, const GameEvent& event) {
     if (!match_started || round_number == 0 || match_over) {
         return;
     }
-    RawDamage damage;
-    damage.tick = tick;
-    damage.round_number = round_number;
-    damage.attacker_steam = steamForUserid(evInt(event, "attacker").value_or(0));
-    damage.victim_steam = steamForUserid(evInt(event, "userid").value_or(0));
-    if (damage.attacker_steam.empty() || damage.attacker_steam == damage.victim_steam) {
+    const SteamId ATTACKER_SID = steamForUserid(evInt(event, "attacker").value_or(0));
+    const SteamId VICTIM_SID = steamForUserid(evInt(event, "userid").value_or(0));
+
+    // Advance the victim's HP chain on every hit, including team / self / world
+    // damage, so successive hits in the same tick cannot reuse the victim's
+    // pre-hit health. Only confirmed enemy damage is credited below.
+    int taken = std::max(evInt(event, "dmg_health").value_or(0), 0);
+    if (!VICTIM_SID.empty()) {
+        int& before = victim_health.try_emplace(VICTIM_SID, MAX_HEALTH_DAMAGE).first->second;
+        taken = std::min(taken, before);
+        const int HEALTH_AFTER = evInt(event, "health").value_or(-1);
+        if (HEALTH_AFTER >= 0) {
+            // Reported HP can fall by an extra point from rounding; do not
+            // credit that as damage (awpy's ADR rule).
+            before = std::clamp(HEALTH_AFTER, 0, MAX_HEALTH_DAMAGE);
+        } else {
+            before -= taken;
+        }
+    } else {
+        taken = std::min(taken, MAX_HEALTH_DAMAGE);
+    }
+
+    if (ATTACKER_SID.empty() || ATTACKER_SID == VICTIM_SID) {
         return;
     }
-    auto attacker_team = team_of.find(damage.attacker_steam);
-    auto victim_team = team_of.find(damage.victim_steam);
+    auto attacker_team = team_of.find(ATTACKER_SID);
+    auto victim_team = team_of.find(VICTIM_SID);
     if (attacker_team != team_of.end() && victim_team != team_of.end() &&
         attacker_team->second == victim_team->second) {
         return;
     }
-    int taken = evInt(event, "dmg_health").value_or(0);
-    taken = std::min(taken, MAX_HEALTH_DAMAGE);
-    taken = std::max(taken, 0);
-    const int HEALTH_AFTER = evInt(event, "health").value_or(-1);
-    if (HEALTH_AFTER == 0 && health_lookup != nullptr) {
-        const int PRE = health_lookup(health_lookup_ctx, damage.victim_steam);
-        if (PRE > 0 && PRE < taken) {
-            taken = PRE;
-        }
-    }
+
+    RawDamage damage;
+    damage.tick = tick;
+    damage.round_number = round_number;
+    damage.attacker_steam = ATTACKER_SID;
+    damage.victim_steam = VICTIM_SID;
     damage.health_damage = taken;
     damage.headshot = evInt(event, "hitgroup").value_or(0) == HEADSHOT_HITGROUP;
     damage.weapon = evString(event, "weapon").value_or("");

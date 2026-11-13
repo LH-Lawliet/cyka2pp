@@ -145,6 +145,7 @@ void CollectingListener::beginRound(Tick tick) {
     ++round_number;
     round_live = true;
     bomb_state.clear();
+    victim_health.clear();
     pending = RawRound{};
     pending.number = round_number;
     pending.start_tick = freeze_start > 0 ? freeze_start : tick;

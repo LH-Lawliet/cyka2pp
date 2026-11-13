@@ -34,8 +34,6 @@ class EntityBridge {
 
     /// Fill shot aim from the current entity state (call during weapon_fire).
     [[nodiscard]] bool fillShotAim(const SteamId& steam, RawShot& shot);
-    /// Current pawn HP for steam id, or -1 if not found.
-    [[nodiscard]] int healthOf(const SteamId& steam);
 
   private:
     void publishPlayers();

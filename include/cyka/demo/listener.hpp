@@ -110,12 +110,6 @@ class CollectingListener {
         aim_capture = callback;
         aim_capture_ctx = ctx;
     }
-    /// Optional: pre-hurt HP from entities (for overkill clamp). Returns -1 if unknown.
-    using HealthLookup = int (*)(void* ctx, const SteamId& steam);
-    void setHealthLookup(HealthLookup callback, void* ctx) {
-        health_lookup = callback;
-        health_lookup_ctx = ctx;
-    }
 
   private:
     [[nodiscard]] SteamId steamForUserid(std::int32_t userid) const;
@@ -164,6 +158,10 @@ class CollectingListener {
     UserInfoById users;
     std::unordered_map<std::int32_t, SteamId> steam_by_userid;
     std::unordered_map<SteamId, std::string> team_of; // steam → A|B
+    /// Per-round victim HP chain for ADR / utility damage: every player_hurt
+    /// advances it (team / self / world included), so same-tick hits cannot
+    /// reuse the victim's pre-hit health. Cleared on round start.
+    std::unordered_map<SteamId, int> victim_health;
     /// Latest CS team number (2/3) per steam — used to resolve round winners to
     /// the scoreboard letter of whoever is actually on that side right now.
     std::unordered_map<SteamId, int> team_num_of;
@@ -193,8 +191,6 @@ class CollectingListener {
     std::string bomb_state;
     AimCapture aim_capture{nullptr};
     void* aim_capture_ctx{nullptr};
-    HealthLookup health_lookup{nullptr};
-    void* health_lookup_ctx{nullptr};
 };
 
 } // namespace cyka::demo
