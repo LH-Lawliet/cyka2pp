@@ -18,6 +18,7 @@ using cyka::demo::ent::EntSerializer;
 using cyka::demo::ent::FieldModel;
 using cyka::demo::ent::FieldPath;
 using cyka::demo::ent::findDecoder;
+using cyka::demo::ent::findDecoderByBase;
 using cyka::demo::ent::parseFieldType;
 
 inline constexpr int F32_BYTES = 4;
@@ -166,6 +167,114 @@ void testPolyPerEntitySelect() {
     CYKA_CHECK(root.maxPolyId() == 0);
 }
 
+void testFixed8Unsigned() {
+    EntField field;
+    field.var_name = "m_recentKillQueue";
+    field.var_type = "uint8[8]";
+    field.type = parseFieldType("uint8[8]");
+    field.encoder = "fixed8";
+    const DecoderSpec SPEC = findDecoder(field);
+    CYKA_CHECK(SPEC.op == DecOp::FIXED_UNSIGNED);
+    CYKA_CHECK(SPEC.bits == 8);
+
+    // Read as a varint, 0xFF and 0x80 would swallow the following byte.
+    const std::array<std::uint8_t, 3> RAW{0xFF, 0x01, 0x80};
+    BitStream reader(RAW);
+    CYKA_CHECK(decodeValue(SPEC, reader).u == 0xFF);
+    CYKA_CHECK(decodeValue(SPEC, reader).u == 0x01);
+    CYKA_CHECK(decodeValue(SPEC, reader).u == 0x80);
+    CYKA_CHECK(!reader.failed());
+}
+
+void testFixed8Signed() {
+    EntField field;
+    field.var_name = "m_iCompetitiveRankType";
+    field.var_type = "int8";
+    field.type = parseFieldType("int8");
+    field.encoder = "fixed8";
+    const DecoderSpec SPEC = findDecoder(field);
+    CYKA_CHECK(SPEC.op == DecOp::FIXED_SIGNED);
+    CYKA_CHECK(SPEC.bits == 8);
+
+    const std::array<std::uint8_t, 4> RAW{0xFF, 0x0B, 0x80, 0x7F};
+    BitStream reader(RAW);
+    CYKA_CHECK(decodeValue(SPEC, reader).i == -1);
+    CYKA_CHECK(decodeValue(SPEC, reader).i == 11);
+    CYKA_CHECK(decodeValue(SPEC, reader).i == -128);
+    CYKA_CHECK(decodeValue(SPEC, reader).i == 127);
+    CYKA_CHECK(!reader.failed());
+}
+
+void testFixed16And32() {
+    EntField field16;
+    field16.var_type = "uint16";
+    field16.type = parseFieldType("uint16");
+    field16.encoder = "fixed16";
+    const DecoderSpec SPEC16 = findDecoder(field16);
+    CYKA_CHECK(SPEC16.op == DecOp::FIXED_UNSIGNED);
+    CYKA_CHECK(SPEC16.bits == 16);
+    const std::array<std::uint8_t, 2> RAW16{0xEF, 0xBE};
+    BitStream reader16(RAW16);
+    CYKA_CHECK(decodeValue(SPEC16, reader16).u == 0xBEEF);
+    CYKA_CHECK(!reader16.failed());
+
+    EntField field32;
+    field32.var_type = "uint32";
+    field32.type = parseFieldType("uint32");
+    field32.encoder = "fixed32";
+    const DecoderSpec SPEC32 = findDecoder(field32);
+    CYKA_CHECK(SPEC32.op == DecOp::FIXED_UNSIGNED);
+    CYKA_CHECK(SPEC32.bits == 32);
+    const std::array<std::uint8_t, 4> RAW32{0xEF, 0xBE, 0xAD, 0xDE};
+    BitStream reader32(RAW32);
+    CYKA_CHECK(decodeValue(SPEC32, reader32).u == 0xDEADBEEF);
+    CYKA_CHECK(!reader32.failed());
+}
+
+void testUint8WithoutEncoderStaysVarint() {
+    EntField field;
+    field.var_type = "uint8";
+    field.type = parseFieldType("uint8");
+    const DecoderSpec SPEC = findDecoder(field);
+    CYKA_CHECK(SPEC.op == DecOp::UNSIGNED);
+
+    const std::array<std::uint8_t, 2> RAW{0xAC, 0x02};
+    BitStream reader(RAW);
+    CYKA_CHECK(decodeValue(SPEC, reader).u == 300);
+    CYKA_CHECK(!reader.failed());
+}
+
+void testFixed8VectorElements() {
+    EntField field;
+    field.var_name = "m_networkAnimTiming";
+    field.var_type = "CNetworkUtlVectorBase< uint8 >";
+    field.type = parseFieldType("CNetworkUtlVectorBase< uint8 >");
+    field.encoder = "fixed8";
+    const DecoderSpec SPEC = findDecoderByBase(field);
+    CYKA_CHECK(SPEC.op == DecOp::FIXED_UNSIGNED);
+    CYKA_CHECK(SPEC.bits == 8);
+
+    const std::array<std::uint8_t, 2> RAW{0xFF, 0x80};
+    BitStream reader(RAW);
+    CYKA_CHECK(decodeValue(SPEC, reader).u == 0xFF);
+    CYKA_CHECK(decodeValue(SPEC, reader).u == 0x80);
+    CYKA_CHECK(!reader.failed());
+}
+
+void testFixedNKeepsFloatAndUint64Decoders() {
+    EntField float_field;
+    float_field.var_type = "float32";
+    float_field.type = parseFieldType("float32");
+    float_field.encoder = "fixed8";
+    CYKA_CHECK(findDecoder(float_field).op == DecOp::NO_SCALE);
+
+    EntField u64_field;
+    u64_field.var_type = "uint64";
+    u64_field.type = parseFieldType("uint64");
+    u64_field.encoder = "fixed8";
+    CYKA_CHECK(findDecoder(u64_field).op == DecOp::UNSIGNED64);
+}
+
 } // namespace
 
 void test_ent_decode() {
@@ -174,4 +283,10 @@ void test_ent_decode() {
     testPolyWireInactiveSkipsUbitvar();
     testPolyWireActiveIndex();
     testPolyPerEntitySelect();
+    testFixed8Unsigned();
+    testFixed8Signed();
+    testFixed16And32();
+    testUint8WithoutEncoderStaysVarint();
+    testFixed8VectorElements();
+    testFixedNKeepsFloatAndUint64Decoders();
 }

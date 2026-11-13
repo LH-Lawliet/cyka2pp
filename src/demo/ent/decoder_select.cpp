@@ -109,12 +109,54 @@ bool factoryFor(std::string_view base, const EntField& field, DecoderSpec& out) 
     return true;
 }
 
+/// fixedN encoders store N raw bits instead of a varint. CS2 sends most 8-bit
+/// fields this way since the 2026-11-11 update (e.g. m_recentKillQueue,
+/// m_iTeamNum, m_iCompetitiveRankType); read as a varint, any value >= 128
+/// consumes an extra byte and misaligns the rest of the packet.
+bool fixedWidthFactory(const EntField& field, std::string_view base, DecoderSpec& out) {
+    std::uint32_t bits = 0;
+    if (field.encoder == "fixed8") {
+        bits = 8;
+    } else if (field.encoder == "fixed16") {
+        bits = 16;
+    } else if (field.encoder == "fixed32") {
+        bits = 32;
+    } else {
+        return false;
+    }
+
+    // Types with their own decoder (float / vector / uint64 / ...) keep it; the
+    // fixedN encoder only replaces the integer varint decoders.
+    DecoderSpec factory;
+    if (factoryFor(base, field, factory)) {
+        return false;
+    }
+    const auto ITER = typeDecoders().find(base);
+    if (ITER != typeDecoders().end()) {
+        if (ITER->second == DecOp::SIGNED) {
+            out = simple(DecOp::FIXED_SIGNED);
+        } else if (ITER->second == DecOp::UNSIGNED) {
+            out = simple(DecOp::FIXED_UNSIGNED);
+        } else {
+            return false;
+        }
+    } else {
+        // Unmapped enum: the default varint decoder is unsigned.
+        out = simple(DecOp::FIXED_UNSIGNED);
+    }
+    out.bits = bits;
+    return true;
+}
+
 } // namespace
 
 DecoderSpec findDecoder(const EntField& field) {
     const std::string_view BASE =
         field.type ? std::string_view{field.type->base} : std::string_view{};
     DecoderSpec out;
+    if (fixedWidthFactory(field, BASE, out)) {
+        return out;
+    }
     if (factoryFor(BASE, field, out)) {
         return out;
     }
@@ -133,6 +175,9 @@ DecoderSpec findDecoderByBase(const EntField& field) {
     }
     const std::string_view BASE = field.type->generic->base;
     DecoderSpec out;
+    if (fixedWidthFactory(field, BASE, out)) {
+        return out;
+    }
     if (factoryFor(BASE, field, out)) {
         return out;
     }

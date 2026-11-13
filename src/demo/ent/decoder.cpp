@@ -55,6 +55,18 @@ EntValue decodeValue(const DecoderSpec& spec, BitStream& reader) {
         return EntValue::ofUint(reader.readVarU64());
     case DecOp::FIXED64:
         return EntValue::ofUint(reader.readLeU64());
+    case DecOp::FIXED_SIGNED: {
+        const std::uint32_t BITS = spec.bits == 0 ? MAX_READ_BITS : spec.bits;
+        const std::uint64_t RAW = reader.readBits(BITS);
+        const std::uint64_t SIGN = 1ULL << (BITS - 1U);
+        if ((RAW & SIGN) != 0) {
+            return EntValue::ofInt(
+                static_cast<std::int64_t>(RAW) - static_cast<std::int64_t>(1ULL << BITS));
+        }
+        return EntValue::ofInt(static_cast<std::int64_t>(RAW));
+    }
+    case DecOp::FIXED_UNSIGNED:
+        return EntValue::ofUint(reader.readBits(spec.bits));
     case DecOp::STRING:
         return EntValue::ofStr(reader.readString());
     case DecOp::BINARY_BLOCK: {

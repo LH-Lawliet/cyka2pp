@@ -18,6 +18,8 @@ enum class DecOp : std::uint8_t {
     UNSIGNED,
     UNSIGNED64,
     FIXED64,
+    FIXED_SIGNED, // fixedN raw bits, sign-extended (signed base type)
+    FIXED_UNSIGNED, // fixedN raw bits (unsigned / unmapped base type)
     STRING,
     BINARY_BLOCK,
     NO_SCALE,
