@@ -14,6 +14,9 @@ inline constexpr unsigned VEC3_COMPS = 3U;
 inline constexpr unsigned VEC2_COMPS = 2U;
 inline constexpr unsigned VEC4_COMPS = 4U;
 inline constexpr unsigned TRANSFORM_COMPS = 6U;
+inline constexpr std::uint32_t FIXED8_BITS = 8;
+inline constexpr std::uint32_t FIXED16_BITS = 16;
+inline constexpr std::uint32_t FIXED32_BITS = 32;
 
 DecoderSpec simple(DecOp dec_op) {
     DecoderSpec spec;
@@ -116,11 +119,11 @@ bool factoryFor(std::string_view base, const EntField& field, DecoderSpec& out) 
 bool fixedWidthFactory(const EntField& field, std::string_view base, DecoderSpec& out) {
     std::uint32_t bits = 0;
     if (field.encoder == "fixed8") {
-        bits = 8;
+        bits = FIXED8_BITS;
     } else if (field.encoder == "fixed16") {
-        bits = 16;
+        bits = FIXED16_BITS;
     } else if (field.encoder == "fixed32") {
-        bits = 32;
+        bits = FIXED32_BITS;
     } else {
         return false;
     }

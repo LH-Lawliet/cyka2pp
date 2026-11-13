@@ -23,6 +23,22 @@ constexpr int MATE_UID = 3;
 constexpr int TEAM_A = 2;
 constexpr int TEAM_B = 3;
 constexpr int START_TICK = 1;
+constexpr int TICK_10 = 10;
+constexpr int TICK_100 = 100;
+constexpr int TICK_101 = 101;
+constexpr int HP_MAX = 100;
+constexpr int HP_20 = 20;
+constexpr int HP_21 = 21;
+constexpr int HP_30 = 30;
+constexpr int HP_35 = 35;
+constexpr int HP_40 = 40;
+constexpr int HP_43 = 43;
+constexpr int HP_50 = 50;
+constexpr int HP_57 = 57;
+constexpr int HP_60 = 60;
+constexpr int HP_70 = 70;
+constexpr int HP_79 = 79;
+constexpr int HP_80 = 80;
 
 void addUser(UserInfoById& users, int uid, const SteamId& steam, int slot) {
     UserInfo info;
@@ -35,23 +51,23 @@ void addUser(UserInfoById& users, int uid, const SteamId& steam, int slot) {
 
 GameEvent hurt(
     int attacker_uid, int victim_uid, int dmg, int health_after, std::string weapon = "ak47") {
-    GameEvent ev;
-    ev.name = "player_hurt";
-    ev.keys["attacker"] = attacker_uid;
-    ev.keys["userid"] = victim_uid;
-    ev.keys["dmg_health"] = dmg;
-    ev.keys["health"] = health_after;
-    ev.keys["weapon"] = std::move(weapon);
-    ev.keys["hitgroup"] = 0;
-    return ev;
+    GameEvent event;
+    event.name = "player_hurt";
+    event.keys["attacker"] = attacker_uid;
+    event.keys["userid"] = victim_uid;
+    event.keys["dmg_health"] = dmg;
+    event.keys["health"] = health_after;
+    event.keys["weapon"] = std::move(weapon);
+    event.keys["hitgroup"] = 0;
+    return event;
 }
 
 GameEvent team(int uid, int team_num) {
-    GameEvent ev;
-    ev.name = "player_team";
-    ev.keys["userid"] = uid;
-    ev.keys["team"] = team_num;
-    return ev;
+    GameEvent event;
+    event.name = "player_team";
+    event.keys["userid"] = uid;
+    event.keys["team"] = team_num;
+    return event;
 }
 
 CollectingListener makeListener() {
@@ -87,78 +103,78 @@ int totalDamage(const CollectingListener& listener) {
 
 void testAdrCapsKillingBlow() {
     CollectingListener listener = makeListener();
-    listener.onEvent(100, hurt(ATK_UID, VIC_UID, 70, 30));
-    listener.onEvent(101, hurt(ATK_UID, VIC_UID, 100, 0));
+    listener.onEvent(TICK_100, hurt(ATK_UID, VIC_UID, HP_70, HP_30));
+    listener.onEvent(TICK_101, hurt(ATK_UID, VIC_UID, HP_MAX, 0));
 
     CYKA_CHECK(listener.raw().damages.size() == 2);
-    CYKA_CHECK(damageAt(listener, 0).health_damage == 70);
-    CYKA_CHECK(damageAt(listener, 1).health_damage == 30);
+    CYKA_CHECK(damageAt(listener, 0).health_damage == HP_70);
+    CYKA_CHECK(damageAt(listener, 1).health_damage == HP_30);
 }
 
 void testAdrCapsSameTickHits() {
     CollectingListener listener = makeListener();
-    listener.onEvent(100, hurt(ATK_UID, VIC_UID, 79, 21));
-    listener.onEvent(100, hurt(ATK_UID, VIC_UID, 79, 0));
+    listener.onEvent(TICK_100, hurt(ATK_UID, VIC_UID, HP_79, HP_21));
+    listener.onEvent(TICK_100, hurt(ATK_UID, VIC_UID, HP_79, 0));
 
     CYKA_CHECK(listener.raw().damages.size() == 2);
-    CYKA_CHECK(damageAt(listener, 0).health_damage == 79);
-    CYKA_CHECK(damageAt(listener, 1).health_damage == 21);
-    CYKA_CHECK(totalDamage(listener) == 100);
+    CYKA_CHECK(damageAt(listener, 0).health_damage == HP_79);
+    CYKA_CHECK(damageAt(listener, 1).health_damage == HP_21);
+    CYKA_CHECK(totalDamage(listener) == HP_MAX);
 }
 
 void testAdrIgnoresHealthRounding() {
     CollectingListener listener = makeListener();
-    listener.onEvent(100, hurt(ATK_UID, VIC_UID, 43, 57));
+    listener.onEvent(TICK_100, hurt(ATK_UID, VIC_UID, HP_43, HP_57));
     // 57 - 35 = 22, but the event reports 21 HP left: do not credit the extra point.
-    listener.onEvent(101, hurt(ATK_UID, VIC_UID, 35, 21));
+    listener.onEvent(TICK_101, hurt(ATK_UID, VIC_UID, HP_35, HP_21));
 
-    CYKA_CHECK(damageAt(listener, 0).health_damage == 43);
-    CYKA_CHECK(damageAt(listener, 1).health_damage == 35);
-    CYKA_CHECK(totalDamage(listener) == 78);
+    CYKA_CHECK(damageAt(listener, 0).health_damage == HP_43);
+    CYKA_CHECK(damageAt(listener, 1).health_damage == HP_35);
+    CYKA_CHECK(totalDamage(listener) == HP_43 + HP_35);
 }
 
 void testTeamDamageAdvancesChain() {
     CollectingListener listener = makeListener();
-    listener.onEvent(10, team(ATK_UID, TEAM_A));
-    listener.onEvent(10, team(VIC_UID, TEAM_B));
-    listener.onEvent(10, team(MATE_UID, TEAM_B));
+    listener.onEvent(TICK_10, team(ATK_UID, TEAM_A));
+    listener.onEvent(TICK_10, team(VIC_UID, TEAM_B));
+    listener.onEvent(TICK_10, team(MATE_UID, TEAM_B));
 
-    listener.onEvent(100, hurt(MATE_UID, VIC_UID, 50, 50));
-    listener.onEvent(101, hurt(ATK_UID, VIC_UID, 70, 0));
+    listener.onEvent(TICK_100, hurt(MATE_UID, VIC_UID, HP_50, HP_50));
+    listener.onEvent(TICK_101, hurt(ATK_UID, VIC_UID, HP_70, 0));
 
     CYKA_CHECK(listener.raw().damages.size() == 1);
-    CYKA_CHECK(damageAt(listener, 0).health_damage == 50);
+    CYKA_CHECK(damageAt(listener, 0).health_damage == HP_50);
 }
 
 void testSelfDamageAdvancesChain() {
     CollectingListener listener = makeListener();
-    listener.onEvent(100, hurt(VIC_UID, VIC_UID, 40, 60));
-    listener.onEvent(101, hurt(ATK_UID, VIC_UID, 80, 0));
+    listener.onEvent(TICK_100, hurt(VIC_UID, VIC_UID, HP_40, HP_60));
+    listener.onEvent(TICK_101, hurt(ATK_UID, VIC_UID, HP_80, 0));
 
     CYKA_CHECK(listener.raw().damages.size() == 1);
-    CYKA_CHECK(damageAt(listener, 0).health_damage == 60);
+    CYKA_CHECK(damageAt(listener, 0).health_damage == HP_60);
 }
 
 void testWorldDamageAdvancesChain() {
     CollectingListener listener = makeListener();
     // Userid 0 is world / no attacker.
-    listener.onEvent(100, hurt(0, VIC_UID, 40, 60));
-    listener.onEvent(101, hurt(ATK_UID, VIC_UID, 80, 0));
+    listener.onEvent(TICK_100, hurt(0, VIC_UID, HP_40, HP_60));
+    listener.onEvent(TICK_101, hurt(ATK_UID, VIC_UID, HP_80, 0));
 
     CYKA_CHECK(listener.raw().damages.size() == 1);
-    CYKA_CHECK(damageAt(listener, 0).health_damage == 60);
+    CYKA_CHECK(damageAt(listener, 0).health_damage == HP_60);
 }
 
 void testUtilityDamageCapped() {
     CollectingListener listener = makeListener();
-    listener.onEvent(100, hurt(ATK_UID, VIC_UID, 80, 20, "hegrenade"));
-    listener.onEvent(101, hurt(ATK_UID, VIC_UID, 100, 0, "molotov"));
+    listener.onEvent(TICK_100, hurt(ATK_UID, VIC_UID, HP_80, HP_20, "hegrenade"));
+    listener.onEvent(TICK_101, hurt(ATK_UID, VIC_UID, HP_MAX, 0, "molotov"));
 
-    CYKA_CHECK(totalDamage(listener) == 100);
+    CYKA_CHECK(totalDamage(listener) == HP_MAX);
     bool found = false;
     for (const auto& player : listener.raw().players) {
         if (player.steam_id == ATK) {
-            CYKA_CHECK(player.utility_damage == 100);
+            CYKA_CHECK(player.utility_damage == HP_MAX);
             found = true;
         }
     }
