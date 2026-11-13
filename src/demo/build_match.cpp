@@ -12,6 +12,7 @@ namespace cyka::demo {
 namespace {
 
 constexpr int TRADE_WINDOW_SECS = 5;
+inline constexpr int CLAN_TAG_MAJORITY = 2; // more than half of the side
 
 [[nodiscard]] bool playerActive(const RawMatch& raw, const SteamId& sid) {
     const auto INVOLVED = [&](const auto& steam_a, const auto& steam_b) {
@@ -56,7 +57,7 @@ constexpr int TRADE_WINDOW_SECS = 5;
             best_count = COUNT;
         }
     }
-    if (!best.empty() && best_count * 2 > members) {
+    if (!best.empty() && best_count * CLAN_TAG_MAJORITY > members) {
         return best;
     }
     return {};

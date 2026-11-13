@@ -12,12 +12,18 @@ using cyka::demo::buildMatch;
 using cyka::demo::RawMatch;
 using cyka::demo::RawPlayer;
 
-RawPlayer player(const SteamId& steam, std::string letter, std::string clan) {
+struct PlayerSpec {
+    SteamId steam;
+    std::string letter;
+    std::string clan;
+};
+
+RawPlayer player(const PlayerSpec& spec) {
     RawPlayer out;
-    out.steam_id = steam;
+    out.steam_id = spec.steam;
     out.name = "player";
-    out.team_letter = std::move(letter);
-    out.clan_tag = std::move(clan);
+    out.team_letter = spec.letter;
+    out.clan_tag = spec.clan;
     return out;
 }
 
@@ -27,10 +33,10 @@ RawPlayer player(const SteamId& steam, std::string letter, std::string clan) {
 
 void testMajorityClanTagWins() {
     RawMatch raw;
-    raw.players.push_back(player("76561198000000001", "A", "AAA"));
-    raw.players.push_back(player("76561198000000002", "A", "AAA"));
-    raw.players.push_back(player("76561198000000003", "A", "BBB"));
-    raw.players.push_back(player("76561198000000004", "B", ""));
+    raw.players.push_back(player({.steam = "76561198000000001", .letter = "A", .clan = "AAA"}));
+    raw.players.push_back(player({.steam = "76561198000000002", .letter = "A", .clan = "AAA"}));
+    raw.players.push_back(player({.steam = "76561198000000003", .letter = "A", .clan = "BBB"}));
+    raw.players.push_back(player({.steam = "76561198000000004", .letter = "B", .clan = ""}));
     const Match MATCH = build(std::move(raw));
     CYKA_CHECK(MATCH.team_a->name == "AAA");
     CYKA_CHECK(MATCH.team_b->name == "Team B");
@@ -38,33 +44,33 @@ void testMajorityClanTagWins() {
 
 void testNoMajorityFallsBack() {
     RawMatch raw;
-    raw.players.push_back(player("76561198000000001", "A", "AAA"));
-    raw.players.push_back(player("76561198000000002", "A", "BBB"));
+    raw.players.push_back(player({.steam = "76561198000000001", .letter = "A", .clan = "AAA"}));
+    raw.players.push_back(player({.steam = "76561198000000002", .letter = "A", .clan = "BBB"}));
     const Match MATCH = build(std::move(raw));
     CYKA_CHECK(MATCH.team_a->name == "Team A");
 }
 
 void testEmptyClanTagsFallBack() {
     RawMatch raw;
-    raw.players.push_back(player("76561198000000001", "A", ""));
-    raw.players.push_back(player("76561198000000002", "A", ""));
+    raw.players.push_back(player({.steam = "76561198000000001", .letter = "A", .clan = ""}));
+    raw.players.push_back(player({.steam = "76561198000000002", .letter = "A", .clan = ""}));
     const Match MATCH = build(std::move(raw));
     CYKA_CHECK(MATCH.team_a->name == "Team A");
 }
 
 void testExactHalfIsNotMajority() {
     RawMatch raw;
-    raw.players.push_back(player("76561198000000001", "A", "AAA"));
-    raw.players.push_back(player("76561198000000002", "A", "AAA"));
-    raw.players.push_back(player("76561198000000003", "A", "BBB"));
-    raw.players.push_back(player("76561198000000004", "A", "BBB"));
+    raw.players.push_back(player({.steam = "76561198000000001", .letter = "A", .clan = "AAA"}));
+    raw.players.push_back(player({.steam = "76561198000000002", .letter = "A", .clan = "AAA"}));
+    raw.players.push_back(player({.steam = "76561198000000003", .letter = "A", .clan = "BBB"}));
+    raw.players.push_back(player({.steam = "76561198000000004", .letter = "A", .clan = "BBB"}));
     const Match MATCH = build(std::move(raw));
     CYKA_CHECK(MATCH.team_a->name == "Team A");
 }
 
 void testSinglePlayerTeamUsesItsTag() {
     RawMatch raw;
-    raw.players.push_back(player("76561198000000001", "A", "AAA"));
+    raw.players.push_back(player({.steam = "76561198000000001", .letter = "A", .clan = "AAA"}));
     const Match MATCH = build(std::move(raw));
     CYKA_CHECK(MATCH.team_a->name == "AAA");
 }
