@@ -108,6 +108,7 @@ void EntityBridge::publishPlayers() {
             .ranking = ident.ranking,
             .competitive_wins = ident.competitive_wins,
             .crosshair_code = ident.crosshair_code,
+            .clan_tag = ident.clan_tag,
         });
     }
 }

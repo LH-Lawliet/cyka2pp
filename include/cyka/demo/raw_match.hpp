@@ -53,6 +53,8 @@ struct RawPlayer {
     int utility_damage{0};
     /// Crosshair share code from CCSPlayerController::m_szCrosshairCodes.
     std::string crosshair_code;
+    /// CCSPlayerController::m_szClan (current clan tag, may be empty).
+    std::string clan_tag;
     /// Cosmetics from EndOfMatch / SendPlayerLoadout usermessages.
     std::vector<LoadoutItem> loadout;
 };

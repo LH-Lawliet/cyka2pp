@@ -34,6 +34,34 @@ constexpr int TRADE_WINDOW_SECS = 5;
            });
 }
 
+/// CS2 carries the real team name in the players' clan tag. Use the tag shared
+/// by more than half of the side, so one player's personal tag doesn't rename
+/// the whole team.
+[[nodiscard]] std::string teamNameFromClanTags(const RawMatch& raw, const std::string& letter) {
+    std::unordered_map<std::string, int> counts;
+    std::string best;
+    int best_count = 0;
+    int members = 0;
+    for (const auto& player : raw.players) {
+        if (!isIndividualSteam64(player.steam_id) || player.team_letter != letter) {
+            continue;
+        }
+        ++members;
+        if (player.clan_tag.empty()) {
+            continue;
+        }
+        const int COUNT = ++counts[player.clan_tag];
+        if (COUNT > best_count) {
+            best = player.clan_tag;
+            best_count = COUNT;
+        }
+    }
+    if (!best.empty() && best_count * 2 > members) {
+        return best;
+    }
+    return {};
+}
+
 } // namespace
 
 Match buildMatch(RawMatch raw, std::string file_hash) {
@@ -45,12 +73,18 @@ Match buildMatch(RawMatch raw, std::string file_hash) {
     match.duration_ms = raw.duration_ms;
 
     match.team_a = std::make_unique<Team>();
-    match.team_a->name = "Team A";
+    match.team_a->name = teamNameFromClanTags(raw, "A");
+    if (match.team_a->name.empty()) {
+        match.team_a->name = "Team A";
+    }
     match.team_a->letter = "A";
     match.team_a->score = raw.score_a;
 
     match.team_b = std::make_unique<Team>();
-    match.team_b->name = "Team B";
+    match.team_b->name = teamNameFromClanTags(raw, "B");
+    if (match.team_b->name.empty()) {
+        match.team_b->name = "Team B";
+    }
     match.team_b->letter = "B";
     match.team_b->score = raw.score_b;
 

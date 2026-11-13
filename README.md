@@ -18,7 +18,7 @@ than maintaining a multi-repo Go/Python/TS stack.
 | Area                             | What you get                                                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Demo parse**                   | PBDEMS2 stream, snappy frames, game events, string tables, Source 2 entity / sendtable decode, per-tick player poses                       |
-| **Match model**                  | Roster (incl. disconnects), rounds / scores / half scores, kills, damages, flashes, bomb, utility                                          |
+| **Match model**                  | Roster (incl. disconnects) with clan-tag team names, rounds / scores / half scores, kills, damages, flashes, bomb, utility                                          |
 | **Scoreboard**                   | K/A/D, ADR, HS%, KAST, HLTV-style rating (Rtg), trades                                                                                     |
 | **Clutches**                     | Once-per-round 1vN detection + win rates                                                                                                   |
 | **Aim (needs** `--maps-dir`**)** | Median time-to-damage (per-tick LOS), accuracy, spray, counter-strafe %, spotted accuracy, crosshair placement, round swing, kill `ttd_ms` |

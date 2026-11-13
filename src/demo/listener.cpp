@@ -375,6 +375,15 @@ void CollectingListener::noteCrosshair(const SteamId& steam, const std::string& 
     }
 }
 
+void CollectingListener::noteClanTag(const SteamId& steam, const std::string& clan) {
+    if (steam.empty() || clan.empty()) {
+        return;
+    }
+    if (auto* player = findPlayer(steam)) {
+        player->clan_tag = clan;
+    }
+}
+
 void CollectingListener::applyLoadoutItems(const SteamId& steam, std::vector<LoadoutItem> items) {
     if (steam.empty() || items.empty()) {
         return;

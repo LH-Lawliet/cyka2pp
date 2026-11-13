@@ -27,6 +27,8 @@ struct PlayerIdent {
     int competitive_wins{0};
     /// CCSPlayerController::m_szCrosshairCodes share code (may be empty).
     std::string crosshair_code;
+    /// CCSPlayerController::m_szClan (current clan tag, may be empty).
+    std::string clan_tag;
 };
 
 /// One alive-player snapshot at a sampled tick.

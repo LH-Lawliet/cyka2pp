@@ -33,5 +33,6 @@ void test_steam_id();
 void test_userid();
 void test_ent_decode();
 void test_damage();
+void test_team_names();
 void test_spray();
 void test_loadout();

@@ -71,6 +71,7 @@ class CollectingListener {
         int ranking{-1};
         int competitive_wins{-1};
         std::string crosshair_code;
+        std::string clan_tag;
     };
     void observeEntityPlayer(const EntityPlayer& player) {
         if (player.slot >= 0) {
@@ -95,6 +96,9 @@ class CollectingListener {
         }
         if (!player.crosshair_code.empty()) {
             noteCrosshair(player.steam, player.crosshair_code);
+        }
+        if (!player.clan_tag.empty()) {
+            noteClanTag(player.steam, player.clan_tag);
         }
     }
     void addPose(RawPose pose) { raw().poses.push_back(std::move(pose)); }
@@ -134,6 +138,7 @@ class CollectingListener {
     };
     void noteRank(const PlayerRank& rank);
     void noteCrosshair(const SteamId& steam, const std::string& code);
+    void noteClanTag(const SteamId& steam, const std::string& clan);
 
     struct RoundEnd {
         Tick tick{};

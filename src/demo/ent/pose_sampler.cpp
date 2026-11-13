@@ -35,6 +35,7 @@ const std::string RANK_TYPE = "m_iCompetitiveRankType";
 const std::string RANKING = "m_iCompetitiveRanking";
 const std::string COMP_WINS = "m_iCompetitiveWins";
 const std::string CROSSHAIR_CODES = "m_szCrosshairCodes";
+const std::string CLAN_TAG = "m_szClan";
 
 const std::string EYE_ANGLES = "m_angEyeAngles";
 const std::string HEALTH = "m_iHealth";
@@ -191,6 +192,10 @@ void PoseSampler::collectPlayers(const EntityContext& ctx, std::vector<PlayerIde
         if (const auto* xhair = ent->prop(CROSSHAIR_CODES);
             xhair != nullptr && xhair->kind == ValKind::STR && !xhair->s.empty()) {
             ident.crosshair_code = xhair->s;
+        }
+        if (const auto* clan = ent->prop(CLAN_TAG);
+            clan != nullptr && clan->kind == ValKind::STR && !clan->s.empty()) {
+            ident.clan_tag = clan->s;
         }
         if (ident.team_num != TEAM_T && ident.team_num != TEAM_CT) {
             continue;
